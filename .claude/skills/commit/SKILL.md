@@ -28,6 +28,16 @@ Use [Conventional Commits](https://www.conventionalcommits.org/). The subject li
 
 An optional scope is allowed: `feat(backend): ...` or `fix(frontend): ...`.
 
+## Split by part
+
+Never mix `frontend/` and `backend/` changes in one commit. When the working tree touches both, make one commit per part, in separate commits:
+
+1. Group changed files by top-level directory: `backend/` files, `frontend/` files, and everything else (root `config.yaml`, `CLAUDE.md`, `.claude/`, docs).
+2. Create one commit per non-empty group, staging only that group's files by name. Use the scope `(backend)` or `(frontend)` for the first two. Root-level files go in their own unscoped commit.
+3. Order: `backend` first, then `frontend`, then the rest, unless a part depends on another (e.g. an API contract change), in which case the dependency comes first.
+4. If a single file cannot be cleanly attributed to one part (e.g. generated types), put it with the part that produces it, or ask.
+5. Each commit gets its own type and subject matching its content; do not reuse one message for all.
+
 ## What to stage
 
 - Never commit IDE files (`.idea/`, `.vscode/`) or local data (`data/*.db`).
