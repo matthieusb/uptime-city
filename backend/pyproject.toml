@@ -1,0 +1,48 @@
+[project]
+name = "uptime-city"
+version = "0.1.0"
+description = "Uptime monitoring backend: probes services, stores results, exposes them over REST and SSE"
+authors = [
+    { name = "matthieusb", email = "sauboua.beneluz.matthieu@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "alembic>=1.20.1",
+    "asyncpg>=0.32.0",
+    "cryptography>=50.0.2",
+    "dnspython>=2.9.0",
+    "fastapi[standard]>=0.135",
+    "httpx>=0.28.1",
+    "icmplib>=3.0.4",
+    "pydantic>=2",
+    "pyyaml>=6.0.3",
+    "sqlalchemy[asyncio]>=2.0,<2.1",
+]
+
+[project.scripts]
+uptime-city = "uptime_city.main:run"
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.414",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "respx>=0.23.1",
+    "ruff>=0.17.1",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"
