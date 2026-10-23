@@ -88,6 +88,39 @@ describe('plateFrame', () => {
   })
 })
 
+describe('plateFrame centering', () => {
+  it.each([0, 1, 2, 3])(
+    'puts the middle of what neighbourhood %i shows at the middle of the screen',
+    (i) => {
+      const plate = world.neighbourhoods[i]
+      const tallest = Math.max(...plate.layout.lots.map((l) => l.height))
+      const { target } = plateFrame(plate, tallest)
+      const screen = (x: number, y: number, z: number) => ({
+        sx: (x - z) / Math.SQRT2,
+        sy:
+          y * Math.cos(Math.PI / 6) -
+          ((x + z) / Math.SQRT2) * Math.sin(Math.PI / 6),
+      })
+      const points = [-1, 1].flatMap((dx) =>
+        [-1, 1].flatMap((dz) =>
+          [0, tallest].map((y) =>
+            screen(
+              plate.x + dx * plate.layout.halfWidth,
+              y,
+              plate.z + dz * plate.layout.halfDepth,
+            ),
+          ),
+        ),
+      )
+      const middle = (values: number[]) =>
+        (Math.min(...values) + Math.max(...values)) / 2
+      const centre = screen(...target)
+      expect(centre.sx).toBeCloseTo(middle(points.map((p) => p.sx)), 6)
+      expect(centre.sy).toBeCloseTo(middle(points.map((p) => p.sy)), 6)
+    },
+  )
+})
+
 describe('fitZoom', () => {
   it('zooms in more on a smaller frame', () => {
     const big = plateFrame(world.neighbourhoods[0], TOP)

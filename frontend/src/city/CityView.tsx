@@ -132,8 +132,16 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
   )
   const focusFrame = useMemo(() => {
     const plate = world.neighbourhoods.find((n) => n.id === focusedId)
-    return plate ? plateFrame(plate, top) : null
-  }, [world, focusedId, top])
+    if (!plate) return null
+    // Framed up to its own tallest building, to center what it shows.
+    const tallest = Math.max(
+      MIN_TOP,
+      nuked.has(plate.id) ? NUKE_HEIGHT : 0,
+      ...plate.layout.lots.map((l) => l.height),
+    )
+    return plateFrame(plate, tallest)
+    // `nukedKey` stands for `nuked`.
+  }, [world, focusedId, nukedKey])
   // A neighbourhood that is gone cannot stay in focus.
   useEffect(() => {
     if (focusedId && !focus) setFocusedId(null)
@@ -239,18 +247,34 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
               <Scenery layout={layout} nuked={isNuked} />
               <Buildings buildings={buildings} />
               {isNuked && <Nuke />}
-              <Label
-                text={names.get(n.id) ?? n.id}
-                badge={NEIGHBOURHOOD_BADGE}
-                y={2}
-                x={-n.layout.halfWidth + 2}
-                size={1.3}
-                order={10}
-              />
+              {/* In focus, its name is shown at the top left of the view. */}
+              {focusedId !== n.id && (
+                <Label
+                  text={names.get(n.id) ?? n.id}
+                  badge={NEIGHBOURHOOD_BADGE}
+                  y={2}
+                  x={-n.layout.halfWidth + 2}
+                  size={1.3}
+                  order={10}
+                />
+              )}
             </Plate>
           )
         })}
       </Canvas>
+      {focusedId && (
+        <div className="city-title" data-testid="city-title">
+          <span className="city-title-name">
+            {names.get(focusedId) ?? focusedId}
+          </span>
+          <span
+            className="city-title-badge"
+            style={{ background: NEIGHBOURHOOD_BADGE.color }}
+          >
+            {NEIGHBOURHOOD_BADGE.text}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
