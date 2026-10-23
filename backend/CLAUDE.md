@@ -2,41 +2,55 @@
 
 Python service that probes the configured services, stores the results and exposes them to the frontend. See the root `CLAUDE.md` for the project overview and the REST/SSE contract with the frontend.
 
-## Configuration format (YAML, Gatus syntax)
+## Configuration format (YAML, Gatus-like syntax)
 
-We follow Gatus's syntax (see its README) and support a subset of it. The example config lives in `config.yaml` at the repo root.
+Checks follow Gatus's syntax (see its README) for a subset of its fields, but they are organized under hosts. The generic example config lives in `backend/example/config.example.yaml`; a local copy, `backend/example/config.yaml`, is git-ignored.
+
+- The top layer is made of **physical hosts** (`hosts:`). A physical host has its own check, which can be any supported check, and contains `services` and **vm-hosts** (`vm-hosts:`).
+- A **vm-host** has its own check and contains `services` only, never other hosts.
+- A service gives its full URL. It never inherits `interval` or `client` settings from its host.
+- While a host is down, its services are not probed. They are recorded as down with `host_down: true`.
+- There is no Gatus `group` field: the host replaces it.
+- An `http(s)://` check, host or service, must have a `[STATUS]` condition, such as `[STATUS] == 200`. Otherwise the config is invalid and the backend does not start.
+- A service's id is `<host-id>-<service-id>`, where the host is the physical host or the vm-host it is listed under. Ids must be unique across the config.
 
 ```yaml
 storage:
   type: sqlite            # sqlite (default) | postgres | memory
   path: data/uptime.db    # or a postgres DSN: postgres://user:pass@host/db
   retention: 30d          # age-based; replaces Gatus's maximum-number-of-results
-endpoints:
-  - name: api
-    group: core
-    url: "https://api.example.org/health"
-    interval: 30s
-    client: {timeout: 5s, insecure: false}
-    conditions:
-      - "[STATUS] == 200"
-      - "[BODY].status == UP"
-      - "[RESPONSE_TIME] < 500"
-      - "[CERTIFICATE_EXPIRATION] > 240h"
-  - name: postgres
-    group: db
-    url: "tcp://db:5432"
-    conditions: ["[CONNECTED] == true"]
-  - name: gateway
+hosts:
+  - name: gateway                 # physical host
     url: "icmp://10.0.0.1"
     conditions: ["[CONNECTED] == true", "[RESPONSE_TIME] < 50"]
-  - name: dns
-    url: "1.1.1.1"
-    dns: {query-name: example.org, query-type: A}
-    conditions: ["[DNS_RCODE] == NOERROR"]
+    vm-hosts:
+      - name: gateway-vm          # vm-host: services only
+        url: "icmp://10.0.0.2"
+        services:
+          - name: dashboard
+            url: "https://dashboard.example.org"
+            conditions: ["[STATUS] == 200"]
+    services:
+      - name: api
+        url: "https://api.example.org/health"
+        interval: 30s
+        client: {timeout: 5s, insecure: false}
+        conditions:
+          - "[STATUS] == 200"
+          - "[BODY].status == UP"
+          - "[RESPONSE_TIME] < 500"
+          - "[CERTIFICATE_EXPIRATION] > 240h"
+      - name: dns
+        url: "1.1.1.1"
+        dns: {query-name: example.org, query-type: A}
+        conditions: ["[DNS_RCODE] == NOERROR"]
+  - name: db
+    url: "tcp://db:5432"
+    conditions: ["[CONNECTED] == true"]
 ```
 
 ### v1
-- Endpoint fields: `name`, `group`, `url`, `method`, `body`, `headers`, `interval` (default 60s), `enabled`, `client.timeout` (default 10s) and `client.insecure`.
+- Check fields (hosts and services): `name`, `url`, `method`, `body`, `headers`, `interval` (default 60s), `enabled`, `client.timeout` (default 10s) and `client.insecure`.
 - Schemes: `http(s)://`, `tcp://`, `icmp://`, and DNS. A DNS check has a `dns: {query-name, query-type}` block and uses the resolver as `url`.
 - Conditions have the form `"<placeholder> <op> <value>"`.
   - Operators: `== != < <= > >=`.
@@ -96,7 +110,7 @@ Conditions are parsed and evaluated by our own code, never with `eval()`.
 - Migrations: Alembic with `render_as_batch=True` so SQLite can handle `ALTER TABLE`.
 - SQLite settings: WAL, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout`, and a single writer.
 - Schema:
-  - `endpoints (id, key UNIQUE, name, group)`
+  - `endpoints (id, key UNIQUE, name, host_id)`
   - `results (endpoint_id, ts, success, status, duration_ms, errors, conditions JSON)`, indexed on `(endpoint_id, ts)`
   - `events (endpoint_id, ts, type)` for UP/DOWN transitions
   - `uptime_hourly (endpoint_id, hour_ts, total, successful, rt_sum_ms)`, PK `(endpoint_id, hour_ts)`
@@ -123,3 +137,17 @@ backend/src/uptime_city/
   api/                  # routes_endpoints.py, routes_stream.py, schemas.py
 backend/tests/
 ```
+
+## Implemented so far
+
+What exists today, one sentence per feature (see `.claude/rules/document-completed-features.md`). The sections above stay the target.
+
+- **Config**: YAML physical hosts, each with its own check, its services and its vm-hosts (which have services only), using `icmp://`, `tcp://` and `http(s)://` URLs, without `enabled` or `dns` yet, and each `http(s)://` check needs a `[STATUS]` condition. See `config/models.py` and `tests/test_config.py`.
+- **Vm-hosts**: the API tells each endpoint's `kind` (physical, vm or service) and a vm-host's `parent_id`; a down physical host does not affect its vm-hosts yet. See `config/models.py`, `tests/test_config.py` and `tests/test_main.py`.
+- **Host down**: a down host's services are recorded as down with `host_down`, without being probed. See `monitor/scheduler.py` and `tests/test_monitor.py`.
+- **HTTP probe**: a check succeeds when every condition passes. See `probes/http.py` and `tests/test_http_probe.py`.
+- **TCP probe**: a check succeeds when the connection opens in time. See `probes/tcp.py` and `tests/test_tcp_probe.py`.
+- **ICMP probe**: the default probe for any other scheme. See `probes/icmp.py` and `tests/test_monitor.py`.
+- **Conditions**: numeric comparisons on `[STATUS]` and `[RESPONSE_TIME]`, for HTTP only. See `conditions/evaluate.py` and `tests/test_http_probe.py`.
+- **Scheduler**: one loop per endpoint, keeping the last 50 results in memory (no storage yet). See `monitor/scheduler.py` and `tests/test_monitor.py`.
+- **API**: `GET /api/v1/endpoints` (each service carries its `host_id`, each endpoint its `kind` and each vm-host its `parent_id`) and `/endpoints/{id}/history`; no `/status` or `/events` yet. See `api/routes_endpoints.py` and `tests/test_main.py`.
