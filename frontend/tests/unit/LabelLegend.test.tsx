@@ -11,11 +11,7 @@ it('lists the three kinds of label, with the physical hostname first', () => {
 
   expect(
     screen.getAllByRole('checkbox').map((c) => c.closest('label')?.textContent),
-  ).toEqual([
-    'Physical hostnamehost',
-    'Services badgeservices',
-    'VM hostnameVM',
-  ])
+  ).toEqual(['Physical hosthost', 'Services badgeservices', 'VM hostVM'])
 })
 
 it('shows only the physical hostname by default', () => {
@@ -28,16 +24,16 @@ it('shows only the physical hostname by default', () => {
         name: new RegExp(name),
       }) as HTMLInputElement
     ).checked
-  expect(checked('Physical hostname')).toBe(true)
+  expect(checked('Physical host')).toBe(true)
   expect(checked('Services badge')).toBe(false)
-  expect(checked('VM hostname')).toBe(false)
+  expect(checked('VM host')).toBe(false)
 })
 
 it('calls onToggle with the kind of the clicked label', async () => {
   const onToggle = vi.fn()
   render(<LabelLegend shown={DEFAULT_LABELS} onToggle={onToggle} />)
 
-  await userEvent.click(screen.getByRole('checkbox', { name: /VM hostname/ }))
+  await userEvent.click(screen.getByRole('checkbox', { name: /VM host/ }))
   expect(onToggle).toHaveBeenCalledWith('vm')
   expect(LABEL_KINDS.map((l) => l.kind)).toEqual(['host', 'services', 'vm'])
 })

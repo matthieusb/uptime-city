@@ -13,7 +13,7 @@ export interface LabelInfo {
 export const LABEL_KINDS: LabelInfo[] = [
   {
     kind: 'host',
-    name: 'Physical hostname',
+    name: 'Physical host',
     badge: { text: 'host', color: '#c9d1d9' },
   },
   {
@@ -23,7 +23,7 @@ export const LABEL_KINDS: LabelInfo[] = [
   },
   {
     kind: 'vm',
-    name: 'VM hostname',
+    name: 'VM host',
     badge: { text: 'VM', color: '#4fa6e0' },
   },
 ]
@@ -31,7 +31,7 @@ export const LABEL_KINDS: LabelInfo[] = [
 export const badgeOf = (kind: LabelKind): Badge =>
   LABEL_KINDS.find((l) => l.kind === kind)!.badge
 
-// Only the physical hostnames show at first, to keep the map readable.
+// Only the physical hosts show at first, to keep the map readable.
 export const DEFAULT_LABELS: ReadonlySet<LabelKind> = new Set(['host'])
 
 export const ALL_LABELS: ReadonlySet<LabelKind> = new Set(

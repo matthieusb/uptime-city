@@ -349,9 +349,12 @@ body {
 }
 
 .city-legend .city-badge {
+  /* The same width for all, in a column on the right. */
+  min-width: 4.5rem;
   margin-left: auto;
   padding: 0 0.45rem;
   font-family: monospace;
+  text-align: center;
   font-size: 0.7rem;
   color: var(--bg);
   border-radius: 999px;
