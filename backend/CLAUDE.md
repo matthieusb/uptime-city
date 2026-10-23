@@ -151,3 +151,4 @@ What exists today, one sentence per feature (see `.claude/rules/document-complet
 - **Conditions**: numeric comparisons on `[STATUS]` and `[RESPONSE_TIME]`, for HTTP only. See `conditions/evaluate.py` and `tests/test_http_probe.py`.
 - **Scheduler**: one loop per endpoint, keeping the last 50 results in memory (no storage yet). See `monitor/scheduler.py` and `tests/test_monitor.py`.
 - **API**: `GET /api/v1/endpoints` (each service carries its `host_id`, each endpoint its `kind` and each vm-host its `parent_id`) and `/endpoints/{id}/history`; no `/status` or `/events` yet. See `api/routes_endpoints.py` and `tests/test_main.py`.
+- **Host summaries**: `GET /api/v1/hosts/summary` gives, for each physical host, how many of its services, and of those on its vm-hosts, are up and down as of their last result. See `monitor/scheduler.py` (`service_counts`), `api/routes_endpoints.py`, `tests/test_monitor.py` and `tests/test_main.py`.

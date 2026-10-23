@@ -99,3 +99,15 @@ def test_history_returns_results() -> None:
 def test_history_unknown_endpoint() -> None:
     with make_client() as client:
         assert client.get("/api/v1/endpoints/nope/history").status_code == 404
+
+
+def test_host_summaries_count_the_services_up_and_down_of_each_physical_host() -> None:
+    with make_client() as client:
+        while not all(
+            client.get(f"/api/v1/endpoints/{id}/history").json()
+            for id in ("macro-server-1-ssh", "monitoring-vm-web")
+        ):
+            pass
+        response = client.get("/api/v1/hosts/summary")
+    # Its own service and the one of its vm-host, both up.
+    assert response.json() == [{"id": "macro-server-1", "services_up": 2, "services_down": 0}]

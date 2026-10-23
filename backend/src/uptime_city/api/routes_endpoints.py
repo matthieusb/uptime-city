@@ -21,6 +21,15 @@ class EndpointInfo(BaseModel):
     """Set for vm-hosts: the id of the physical host they run on."""
 
 
+class HostSummary(BaseModel):
+    id: str
+    """The id of a physical host."""
+    services_up: int
+    """Services running correctly, on the host and on its vm-hosts."""
+    services_down: int
+    """Services that are down, on the host and on its vm-hosts."""
+
+
 def _monitor(request: Request) -> Monitor:
     return request.app.state.monitor
 
@@ -39,6 +48,18 @@ async def list_endpoints(request: Request) -> list[EndpointInfo]:
         )
         for e in _monitor(request).endpoints.values()
     ]
+
+
+@router.get("/hosts/summary")
+async def host_summaries(request: Request) -> list[HostSummary]:
+    monitor = _monitor(request)
+    summaries: list[HostSummary] = []
+    for endpoint in monitor.endpoints.values():
+        if endpoint.kind != "physical":
+            continue
+        up, down = monitor.service_counts(endpoint.id)
+        summaries.append(HostSummary(id=endpoint.id, services_up=up, services_down=down))
+    return summaries
 
 
 @router.get("/endpoints/{endpoint_id}/history")

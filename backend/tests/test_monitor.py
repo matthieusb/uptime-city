@@ -92,3 +92,71 @@ async def test_monitor_skips_services_when_host_is_down() -> None:
     last = monitor.history("srv-app")[-1]
     assert last.success is False
     assert last.host_down is True
+
+
+def make_config_with_vm() -> Config:
+    def service(name: str) -> dict[str, str | timedelta]:
+        return {"name": name, "url": f"icmp://{name}", "interval": TICK}
+
+    return Config.model_validate(
+        {
+            "hosts": [
+                {
+                    "name": "srv",
+                    "url": "icmp://srv",
+                    "interval": TICK,
+                    "services": [service("good"), service("bad")],
+                    "vm-hosts": [
+                        {
+                            "name": "vm",
+                            "url": "icmp://vm",
+                            "interval": TICK,
+                            "services": [service("vm-good"), service("vm-bad"), service("vm-bad2")],
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+
+
+async def test_service_counts_cover_services_of_the_host_and_of_its_vm_hosts() -> None:
+    async def probe(hostname: str, timeout: float) -> ProbeResult:
+        return ProbeResult(
+            ts=datetime.now(UTC), success="bad" not in hostname, error=None, latency_ms=1.0
+        )
+
+    monitor = Monitor(make_config_with_vm(), probe)
+    task = asyncio.create_task(monitor.run())
+    while not all(monitor.history(id) for id in monitor.endpoints):
+        await asyncio.sleep(0.01)
+    task.cancel()
+
+    # The hosts themselves are not services, so they are left out.
+    assert monitor.service_counts("srv") == (2, 3)
+
+
+async def test_service_counts_leave_out_services_not_probed_yet() -> None:
+    async def probe(hostname: str, timeout: float) -> ProbeResult:
+        return ProbeResult(ts=datetime.now(UTC), success=True, latency_ms=1.0)
+
+    monitor = Monitor(make_config_with_vm(), probe)
+
+    assert monitor.service_counts("srv") == (0, 0)
+
+
+async def test_service_counts_count_the_services_of_a_down_host_as_down() -> None:
+    async def probe(hostname: str, timeout: float) -> ProbeResult:
+        return ProbeResult(ts=datetime.now(UTC), success=hostname != "srv", error="unreachable")
+
+    monitor = Monitor(make_config_with_vm(), probe)
+    task = asyncio.create_task(monitor.run())
+    # Until the skipped checks of the two services right on the host are recorded.
+    while not all(
+        monitor.history(id) and monitor.history(id)[-1].host_down for id in ("srv-good", "srv-bad")
+    ) or not all(monitor.history(id) for id in monitor.endpoints):
+        await asyncio.sleep(0.01)
+    task.cancel()
+
+    # The services of the vm-host are probed on their own and are up.
+    assert monitor.service_counts("srv") == (3, 2)

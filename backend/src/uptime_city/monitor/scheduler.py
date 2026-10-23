@@ -27,6 +27,23 @@ class Monitor:
         """Last `limit` results, oldest first."""
         return list(self._results[endpoint_id])[-limit:]
 
+    def service_counts(self, physical_id: str) -> tuple[int, int]:
+        """How many services of a physical host are up and down, as of their last result.
+
+        It covers the services right on the host and those on its vm-hosts. A service
+        not probed yet counts for neither.
+        """
+        hosts = {physical_id} | {
+            e.id for e in self.endpoints.values() if e.kind == "vm" and e.parent_id == physical_id
+        }
+        latest = [
+            self._results[e.id][-1]
+            for e in self.endpoints.values()
+            if e.kind == "service" and e.host_id in hosts and self._results[e.id]
+        ]
+        up = sum(1 for result in latest if result.success)
+        return up, len(latest) - up
+
     async def run(self) -> None:
         async with asyncio.TaskGroup() as group:
             for endpoint in self.endpoints.values():
