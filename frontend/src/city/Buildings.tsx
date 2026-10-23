@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
 import { MeshLambertMaterial, type Group, type Sprite } from 'three'
-import { buildingGlow, type BuildingState } from '../domain/status'
+import { badgeBreath, buildingGlow, type BuildingState } from '../domain/status'
 import {
   collapseProgress,
   floorPose,
@@ -69,31 +69,58 @@ export function Label({
 }) {
   const hidden = useContext(LabelsHidden)
   const sprite = useRef<Sprite>(null)
+  const pulse = useRef<Sprite>(null)
   // Badges are often rebuilt on render: compare them by what they show.
   const badgeKey = [badge ?? []]
     .flat()
     .map((b) => `${b.text}|${b.color}|${b.textColor}`)
     .join()
   const label = useMemo(() => labelTexture(text, badge), [text, badgeKey])
-  useEffect(() => () => label.texture.dispose(), [label])
-  useFrame(({ camera }) => {
-    if (!sprite.current) return
-    sprite.current.visible = !hidden && camera.zoom >= minZoom
-    sprite.current.scale.set(
-      (size * label.width) / camera.zoom,
-      (size * label.height) / camera.zoom,
-      1,
-    )
+  useEffect(
+    () => () => {
+      label.texture.dispose()
+      label.pulse?.dispose()
+    },
+    [label],
+  )
+  useFrame(({ camera, clock }) => {
+    const shown = !hidden && camera.zoom >= minZoom
+    // The counting badges are a layer of their own, which breathes.
+    for (const [layer, opacity] of [
+      [sprite.current, 1],
+      [pulse.current, badgeBreath(clock.elapsedTime)],
+    ] as const) {
+      if (!layer) continue
+      layer.visible = shown
+      layer.material.opacity = opacity
+      layer.scale.set(
+        (size * label.width) / camera.zoom,
+        (size * label.height) / camera.zoom,
+        1,
+      )
+    }
   })
   return (
-    <sprite
-      ref={sprite}
-      position={[x, y, z]}
-      center={[anchor, 0.5]}
-      renderOrder={order}
-    >
-      <spriteMaterial map={label.texture} depthTest={false} transparent />
-    </sprite>
+    <>
+      <sprite
+        ref={sprite}
+        position={[x, y, z]}
+        center={[anchor, 0.5]}
+        renderOrder={order}
+      >
+        <spriteMaterial map={label.texture} depthTest={false} transparent />
+      </sprite>
+      {label.pulse && (
+        <sprite
+          ref={pulse}
+          position={[x, y, z]}
+          center={[anchor, 0.5]}
+          renderOrder={order}
+        >
+          <spriteMaterial map={label.pulse} depthTest={false} transparent />
+        </sprite>
+      )}
+    </>
   )
 }
 

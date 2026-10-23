@@ -14,7 +14,9 @@ export default function HostTitle({
       {badges.map((badge) => (
         <span
           key={badge.text + badge.color}
-          className="city-title-badge"
+          className={
+            badge.pulse ? 'city-title-badge breathing' : 'city-title-badge'
+          }
           style={{ background: badge.color, color: badge.textColor }}
         >
           {badge.text}

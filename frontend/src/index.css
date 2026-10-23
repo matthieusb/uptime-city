@@ -432,3 +432,25 @@ body {
   color: var(--muted);
   font-size: 0.75rem;
 }
+
+/* The badges that count services breathe, as slowly as the buildings glow. */
+.breathing {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breathing {
+    animation: none;
+  }
+}

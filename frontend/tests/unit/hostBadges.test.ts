@@ -58,3 +58,16 @@ describe('buildingBadges', () => {
     expect(badges[2].color).toMatch(/^#e74c3c$/i)
   })
 })
+
+describe('counting badges', () => {
+  it('breathe, unlike the badge of the host', () => {
+    const [host, up, down] = hostBadges({
+      id: 'a',
+      services_up: 1,
+      services_down: 1,
+    })
+    expect(host.pulse).toBeFalsy()
+    expect(up.pulse).toBe(true)
+    expect(down.pulse).toBe(true)
+  })
+})

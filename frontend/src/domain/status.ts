@@ -33,6 +33,18 @@ export interface Glow {
 const wave = (timeS: number, periodS: number) =>
   0.5 + 0.5 * Math.sin((2 * Math.PI * timeS) / periodS)
 
+// Seconds of a breath of the badges that count services.
+export const BADGE_BREATH_S = 4
+
+// The least opaque a counting badge gets: it only dims a little.
+export const BADGE_BREATH_MIN = 0.8
+
+// How opaque a counting badge is at a given time: it breathes between a
+// slightly dimmed and a full badge, as slowly as the green glow of a building.
+export function badgeBreath(timeS: number): number {
+  return BADGE_BREATH_MIN + (1 - BADGE_BREATH_MIN) * wave(timeS, BADGE_BREATH_S)
+}
+
 // How a building glows at a given time: a slow green breath when up,
 // a slow red blink while burning when down.
 export function buildingGlow(status: Status, timeS: number): Glow {

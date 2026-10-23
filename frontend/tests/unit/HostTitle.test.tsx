@@ -29,3 +29,16 @@ it('leaves out the counts that are zero', () => {
 
   expect(screen.getByTestId('city-title').textContent).toBe('pi3host')
 })
+
+it('makes the counting badges breathe, not the host badge', () => {
+  render(
+    <HostTitle
+      name="nas"
+      badges={hostBadges({ id: 'n', services_up: 2, services_down: 1 })}
+    />,
+  )
+
+  expect(screen.getByText('host').className).not.toContain('breathing')
+  expect(screen.getByText('2').className).toContain('breathing')
+  expect(screen.getByText('1').className).toContain('breathing')
+})

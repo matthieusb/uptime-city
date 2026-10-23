@@ -56,13 +56,18 @@ export const DEFAULT_LABELS = ALL_LABELS
 function countBadges(summary: HostSummary | undefined): Badge[] {
   const badges: Badge[] = []
   if (summary && summary.services_up > 0) {
-    badges.push({ text: String(summary.services_up), color: statusColor('up') })
+    badges.push({
+      text: String(summary.services_up),
+      color: statusColor('up'),
+      pulse: true,
+    })
   }
   if (summary && summary.services_down > 0) {
     badges.push({
       text: String(summary.services_down),
       color: statusColor('down'),
       textColor: '#ffffff',
+      pulse: true,
     })
   }
   return badges
