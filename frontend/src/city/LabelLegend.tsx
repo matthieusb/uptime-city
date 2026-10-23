@@ -20,10 +20,10 @@ export default function LabelLegend({
         <label key={kind}>
           <input
             type="checkbox"
+            aria-label={name}
             checked={shown.has(kind)}
             onChange={() => onToggle(kind)}
           />
-          <span>{name}</span>
           <span className="city-badge" style={{ background: badge.color }}>
             {badge.text}
           </span>

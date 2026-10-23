@@ -317,7 +317,6 @@ body {
   flex-direction: column;
   box-sizing: border-box;
   gap: 0.35rem;
-  min-width: 13rem;
   max-width: calc(100% - 1.5rem);
   padding: 0.5rem 0.75rem;
   font-size: 0.85rem;
@@ -349,9 +348,8 @@ body {
 }
 
 .city-legend .city-badge {
-  /* The same width for all, in a column on the right. */
+  /* The same width for all. */
   min-width: 4.5rem;
-  margin-left: auto;
   padding: 0 0.45rem;
   font-family: monospace;
   text-align: center;

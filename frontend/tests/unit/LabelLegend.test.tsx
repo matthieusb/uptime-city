@@ -11,7 +11,7 @@ it('lists the three kinds of label, with the physical hostname first', () => {
 
   expect(
     screen.getAllByRole('checkbox').map((c) => c.closest('label')?.textContent),
-  ).toEqual(['Physical hosthost', 'Services badgeservices', 'VM hostVM'])
+  ).toEqual(['host', 'services', 'VM'])
 })
 
 it('shows only the physical hostname by default', () => {

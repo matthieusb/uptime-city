@@ -19,7 +19,13 @@ import {
 import Nuke from './effects/Nuke'
 import { NUKE_HEIGHT } from './effects/nukeShape'
 import LabelLegend from './LabelLegend'
-import { ALL_LABELS, badgeOf, DEFAULT_LABELS, type LabelKind } from './labels'
+import {
+  ALL_LABELS,
+  badgeOf,
+  shortBadgeOf,
+  DEFAULT_LABELS,
+  type LabelKind,
+} from './labels'
 import Plate from './Plate'
 import Scenery from './Scenery'
 import { nukedLayout, worldFrame, worldLayout, type Frame } from './world'
@@ -68,6 +74,8 @@ const MIN_TOP = 6
 
 const VM_BADGE = badgeOf('vm')
 const SERVICES_BADGE = badgeOf('services')
+const SHORT_VM_BADGE = shortBadgeOf('vm')
+const SHORT_SERVICES_BADGE = shortBadgeOf('services')
 const NEIGHBOURHOOD_BADGE = badgeOf('host')
 
 export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
@@ -248,10 +256,19 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
               const floors = [...group.services].reverse()
               return {
                 lot,
-                name: group.host.kind === 'vm' ? group.host.name : '',
+                // On the whole map, a badge alone: there is little room.
+                name:
+                  group.host.kind === 'vm' && focusedId ? group.host.name : '',
                 services: floors.map((s) => s.name),
                 labelSide: sides.get(lot.id),
-                badge: group.host.kind === 'vm' ? VM_BADGE : SERVICES_BADGE,
+                badge:
+                  group.host.kind === 'vm'
+                    ? focusedId
+                      ? VM_BADGE
+                      : SHORT_VM_BADGE
+                    : focusedId
+                      ? SERVICES_BADGE
+                      : SHORT_SERVICES_BADGE,
                 showLabel: labels.has(
                   group.host.kind === 'vm' ? 'vm' : 'services',
                 ),
