@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hostBadges } from '../../src/city/labels'
+import { buildingBadges, hostBadges } from '../../src/city/labels'
 
 describe('hostBadges', () => {
   it('shows the host badge alone without any service count', () => {
@@ -34,5 +34,27 @@ describe('hostBadges', () => {
         (b) => b.text,
       ),
     ).toEqual(['host', '4'])
+  })
+})
+
+describe('buildingBadges', () => {
+  const base = { text: 'VM', color: '#4fa6e0' }
+
+  it('keeps the badge of the building alone without any service count', () => {
+    expect(buildingBadges(base, undefined)).toEqual([base])
+    expect(
+      buildingBadges(base, { id: 'v', services_up: 0, services_down: 0 }),
+    ).toEqual([base])
+  })
+
+  it('adds the green and the red counts of the services of the building', () => {
+    const badges = buildingBadges(base, {
+      id: 'v',
+      services_up: 5,
+      services_down: 1,
+    })
+    expect(badges.map((b) => b.text)).toEqual(['VM', '5', '1'])
+    expect(badges[1].color).toMatch(/^#2ecc71$/i)
+    expect(badges[2].color).toMatch(/^#e74c3c$/i)
   })
 })

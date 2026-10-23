@@ -1,5 +1,10 @@
 import { queryOptions } from '@tanstack/react-query'
-import { fetchHistory, fetchHostSummaries, type EndpointInfo } from './client'
+import {
+  fetchBuildingSummaries,
+  fetchHistory,
+  fetchHostSummaries,
+  type EndpointInfo,
+} from './client'
 
 export const historyQuery = (endpoint: EndpointInfo) =>
   queryOptions({
@@ -13,5 +18,12 @@ export const historyQuery = (endpoint: EndpointInfo) =>
 export const hostSummariesQuery = queryOptions({
   queryKey: ['host-summaries'],
   queryFn: fetchHostSummaries,
+  refetchInterval: 10_000,
+})
+
+// The same per building: the services right on each host, physical or vm.
+export const buildingSummariesQuery = queryOptions({
+  queryKey: ['building-summaries'],
+  queryFn: fetchBuildingSummaries,
   refetchInterval: 10_000,
 })

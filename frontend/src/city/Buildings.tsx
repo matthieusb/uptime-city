@@ -20,8 +20,8 @@ export interface BuildingProps {
   services: string[]
   // Which side of the building, on screen, the floor labels go to.
   labelSide?: 'left' | 'right'
-  // Tells what the building is, next to its name.
-  badge?: Badge
+  // Tells what the building is, next to its name, and how its services do.
+  badge?: Badge | Badge[]
   // Whether the name and badge of the building show.
   showLabel?: boolean
   state: BuildingState

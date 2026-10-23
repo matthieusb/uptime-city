@@ -51,11 +51,10 @@ export const ALL_LABELS: ReadonlySet<LabelKind> = new Set(
 // Every kind of label shows at first.
 export const DEFAULT_LABELS = ALL_LABELS
 
-// The badges of a physical host: its own, then the number of services that
-// run correctly (green) and of those that are down (red), on the host and on
-// its vm-hosts. A count of zero has no badge.
-export function hostBadges(summary: HostSummary | undefined): Badge[] {
-  const badges = [shortBadgeOf('host')]
+// The green badge with the number of services running correctly and the red
+// one with the number of those that are down. A count of zero has no badge.
+function countBadges(summary: HostSummary | undefined): Badge[] {
+  const badges: Badge[] = []
   if (summary && summary.services_up > 0) {
     badges.push({ text: String(summary.services_up), color: statusColor('up') })
   }
@@ -67,4 +66,19 @@ export function hostBadges(summary: HostSummary | undefined): Badge[] {
     })
   }
   return badges
+}
+
+// The badges of a physical host: its own, then the services that run
+// correctly and those that are down, on the host and on its vm-hosts.
+export function hostBadges(summary: HostSummary | undefined): Badge[] {
+  return [shortBadgeOf('host'), ...countBadges(summary)]
+}
+
+// The badges of a building: its own, then the services of this building that
+// run correctly and those that are down.
+export function buildingBadges(
+  badge: Badge,
+  summary: HostSummary | undefined,
+): Badge[] {
+  return [badge, ...countBadges(summary)]
 }

@@ -19,3 +19,6 @@ export const fetchHistory = (id: string) =>
 
 export const fetchHostSummaries = () =>
   getJson<HostSummary[]>('/api/v1/hosts/summary')
+
+export const fetchBuildingSummaries = () =>
+  getJson<HostSummary[]>('/api/v1/buildings/summary')

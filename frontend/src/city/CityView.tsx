@@ -3,7 +3,11 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { EndpointInfo } from '../api/client'
-import { historyQuery, hostSummariesQuery } from '../api/queries'
+import {
+  buildingSummariesQuery,
+  historyQuery,
+  hostSummariesQuery,
+} from '../api/queries'
 import { buildingFloors } from '../domain/floors'
 import { allHosts, groupByHost } from '../domain/hosts'
 import { buildingState, latestStatus, nukedState } from '../domain/status'
@@ -32,6 +36,7 @@ import LabelLegend from './LabelLegend'
 import {
   ALL_LABELS,
   badgeOf,
+  buildingBadges,
   hostBadges,
   shortBadgeOf,
   DEFAULT_LABELS,
@@ -119,6 +124,12 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
   const summaryOf = useMemo(
     () => new Map((summaries ?? []).map((s) => [s.id, s])),
     [summaries],
+  )
+  // The same for the services right on each building, from the backend.
+  const { data: buildingSummaries } = useQuery(buildingSummariesQuery)
+  const buildingSummaryOf = useMemo(
+    () => new Map((buildingSummaries ?? []).map((s) => [s.id, s])),
+    [buildingSummaries],
   )
   const hosts = useMemo(
     () => new Map(allHosts(groups).map((g) => [g.host.id, g])),
@@ -298,14 +309,15 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
                   group.host.kind === 'vm' && focusedId ? group.host.name : '',
                 services: floors.map((s) => s.name),
                 labelSide: sides.get(lot.id),
-                badge:
-                  group.host.kind === 'vm'
-                    ? focusedId
-                      ? VM_BADGE
-                      : SHORT_VM_BADGE
-                    : focusedId
-                      ? SERVICES_BADGE
-                      : SHORT_SERVICES_BADGE,
+                // In focus, the services of the building up and down.
+                badge: focusedId
+                  ? buildingBadges(
+                      group.host.kind === 'vm' ? VM_BADGE : SERVICES_BADGE,
+                      buildingSummaryOf.get(lot.id),
+                    )
+                  : group.host.kind === 'vm'
+                    ? SHORT_VM_BADGE
+                    : SHORT_SERVICES_BADGE,
                 showLabel: labels.has(
                   group.host.kind === 'vm' ? 'vm' : 'services',
                 ),

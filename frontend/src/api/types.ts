@@ -28,8 +28,31 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    /** Host Summaries */
+    /**
+     * Host Summaries
+     * @description For each physical host, its services and those of its vm-hosts.
+     */
     get: operations['host_summaries_api_v1_hosts_summary_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/buildings/summary': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Building Summaries
+     * @description For each host, physical or vm, its own services only: what its building shows.
+     */
+    get: operations['building_summaries_api_v1_buildings_summary_get']
     put?: never
     post?: never
     delete?: never
@@ -172,6 +195,26 @@ export interface operations {
     }
   }
   host_summaries_api_v1_hosts_summary_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HostSummary'][]
+        }
+      }
+    }
+  }
+  building_summaries_api_v1_buildings_summary_get: {
     parameters: {
       query?: never
       header?: never
