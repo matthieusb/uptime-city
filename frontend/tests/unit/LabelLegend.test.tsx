@@ -14,8 +14,8 @@ it('lists the three kinds of label, with the physical hostname first', () => {
   ).toEqual(['host', 'services', 'VM'])
 })
 
-it('shows only the physical hostname by default', () => {
-  expect([...DEFAULT_LABELS]).toEqual(['host'])
+it('checks every kind of label by default', () => {
+  expect([...DEFAULT_LABELS]).toEqual(['host', 'services', 'vm'])
   render(<LabelLegend shown={DEFAULT_LABELS} onToggle={vi.fn()} />)
 
   const checked = (name: string) =>
@@ -25,8 +25,8 @@ it('shows only the physical hostname by default', () => {
       }) as HTMLInputElement
     ).checked
   expect(checked('Physical host')).toBe(true)
-  expect(checked('Services badge')).toBe(false)
-  expect(checked('VM host')).toBe(false)
+  expect(checked('Services badge')).toBe(true)
+  expect(checked('VM host')).toBe(true)
 })
 
 it('calls onToggle with the kind of the clicked label', async () => {

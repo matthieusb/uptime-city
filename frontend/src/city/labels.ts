@@ -42,9 +42,9 @@ export const shortBadgeOf = (kind: LabelKind): Badge => {
   return { ...badge, text: short }
 }
 
-// Only the physical hosts show at first, to keep the map readable.
-export const DEFAULT_LABELS: ReadonlySet<LabelKind> = new Set(['host'])
-
 export const ALL_LABELS: ReadonlySet<LabelKind> = new Set(
   LABEL_KINDS.map((l) => l.kind),
 )
+
+// Every kind of label shows at first.
+export const DEFAULT_LABELS = ALL_LABELS
