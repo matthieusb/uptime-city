@@ -18,6 +18,7 @@ import {
 } from './FocusRig'
 import Nuke from './effects/Nuke'
 import { NUKE_HEIGHT } from './effects/nukeShape'
+import HostTitle from './HostTitle'
 import LabelLegend from './LabelLegend'
 import {
   ALL_LABELS,
@@ -77,7 +78,6 @@ const VM_BADGE = badgeOf('vm')
 const SERVICES_BADGE = badgeOf('services')
 const SHORT_VM_BADGE = shortBadgeOf('vm')
 const SHORT_SERVICES_BADGE = shortBadgeOf('services')
-const NEIGHBOURHOOD_BADGE = badgeOf('host')
 
 export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
   // One neighbourhood per physical host, one building per vm-host and one for
@@ -324,17 +324,10 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
       </Canvas>
       {!focusedId && <LabelLegend shown={chosen} onToggle={toggleLabel} />}
       {focusedId && (
-        <div className="city-title" data-testid="city-title">
-          <span className="city-title-name">
-            {names.get(focusedId) ?? focusedId}
-          </span>
-          <span
-            className="city-title-badge"
-            style={{ background: NEIGHBOURHOOD_BADGE.color }}
-          >
-            {NEIGHBOURHOOD_BADGE.text}
-          </span>
-        </div>
+        <HostTitle
+          name={names.get(focusedId) ?? focusedId}
+          badges={hostBadges(summaryOf.get(focusedId))}
+        />
       )}
     </div>
   )
