@@ -1,7 +1,7 @@
 // Pure layout of the whole map, independent of three.js: one neighbourhood
 // per physical host. The neighbourhoods are the plates of one ground, side by
-// side in a grid, each with its own look, and roads run from one to the next.
-// The cells of the grid that no host fills are wilderness.
+// side in rows, each with its own look and its own size, and roads run from
+// one to the next. There is never any void between them.
 import {
   CRATER_TOP,
   cityLayout,
@@ -120,16 +120,37 @@ function linkRoads(
   }
 }
 
+interface Size {
+  width: number
+  depth: number
+}
+
+// Cuts the plates into rows of the given length: a row is as deep as its
+// deepest plate, and the map as wide as its widest row.
+function rowsOf<T>(items: T[], columns: number): T[][] {
+  const rows: T[][] = []
+  for (let i = 0; i < items.length; i += columns) {
+    rows.push(items.slice(i, i + columns))
+  }
+  return rows
+}
+
 // How many plates side by side make the map as square as possible, without
-// leaving many cells empty.
-function chooseColumns(plates: number, width: number, depth: number): number {
+// wasting much ground on padding.
+function chooseColumns(sizes: Size[]): number {
+  const area = sizes.reduce((sum, s) => sum + s.width * s.depth, 0)
   let best = 1
   let bestScore = Infinity
-  for (let columns = 1; columns <= plates; columns++) {
-    const rows = Math.ceil(plates / columns)
-    const aspect = (columns * width) / (rows * depth)
-    const empty = columns * rows - plates
-    const score = Math.abs(Math.log(aspect)) + 0.1 * empty
+  for (let columns = 1; columns <= sizes.length; columns++) {
+    const rows = rowsOf(sizes, columns)
+    const width = Math.max(
+      ...rows.map((row) => row.reduce((sum, s) => sum + s.width, 0)),
+    )
+    const depth = rows.reduce(
+      (sum, row) => sum + Math.max(...row.map((s) => s.depth)),
+      0,
+    )
+    const score = Math.abs(Math.log(width / depth)) + (width * depth) / area
     if (score < bestScore) [best, bestScore] = [columns, score]
   }
   return best
@@ -139,36 +160,63 @@ export function worldLayout(specs: NeighbourhoodSpec[]): World {
   const themeOf = (i: number) => THEMES[i % THEMES.length]
   const items = specs.map(withDecor)
 
-  // Every plate is as wide as the widest one, so that they fit together.
+  // Every neighbourhood is as big as its buildings need: the less services
+  // and vms, the smaller. The plates of a row are as deep as the deepest of
+  // them, and every row as wide as the widest, so that they fit together.
   const natural = items.map((hosts, i) => cityLayout(hosts, themeOf(i)))
-  const halfWidth = Math.max(0, ...natural.map((l) => l.halfWidth))
-  const minHalfWidth = Math.round(halfWidth - 0.5)
-  const halfDepth = Math.max(0, ...natural.map((l) => l.halfDepth))
   const columns = specs.length
-    ? chooseColumns(specs.length, 2 * halfWidth, 2 * halfDepth)
+    ? chooseColumns(
+        natural.map((l) => ({
+          width: 2 * l.halfWidth,
+          depth: 2 * l.halfDepth,
+        })),
+      )
     : 0
-  const rows = columns ? Math.ceil(specs.length / columns) : 0
-  const layouts = Array.from({ length: columns * rows }, (_, i) =>
-    cityLayout(items[i] ?? [], themeOf(i), minHalfWidth),
+  const rowsIndex = rowsOf(
+    specs.map((_, i) => i),
+    columns,
   )
-  const cellWidth = 2 * Math.max(0, ...layouts.map((l) => l.halfWidth))
-  const cellDepth = 2 * Math.max(0, ...layouts.map((l) => l.halfDepth))
+  const rowWidth = (row: number[]) =>
+    row.reduce((sum, i) => sum + 2 * natural[i].halfWidth, 0)
+  const mapWidth = Math.max(0, ...rowsIndex.map(rowWidth))
 
-  const place = (more: number): Neighbourhood[] =>
-    layouts.map((layout, i) => {
-      const row = Math.floor(i / columns)
-      const column = i % columns
-      return {
-        id: specs[i]?.id ?? `wild-${i - specs.length}`,
-        x: (column - (columns - 1) / 2) * cellWidth,
-        z: (row - (rows - 1) / 2) * (cellDepth + more),
-        layout: linkRoads(layout, {
-          sideways: columns > 1,
-          below: row < rows - 1,
-          above: row > 0,
-        }),
-      }
+  // The plates touch each other: when buildings of a plate could hide those
+  // of the plate behind it, the plates all grow deeper instead of moving apart.
+  const build = (more: number): Neighbourhood[] => {
+    const depths = rowsIndex.map(
+      (row) => Math.max(...row.map((i) => natural[i].halfDepth)) + more / 2,
+    )
+    const height = 2 * depths.reduce((sum, d) => sum + d, 0)
+    const plates: Neighbourhood[] = []
+    let z = -height / 2
+    rowsIndex.forEach((row, r) => {
+      // The last plate of a row takes the width the row lacks.
+      const spare = (mapWidth - rowWidth(row)) / 2
+      let x = -mapWidth / 2
+      row.forEach((i, c) => {
+        const last = c === row.length - 1
+        const layout = cityLayout(
+          items[i],
+          themeOf(i),
+          natural[i].halfWidth - 0.5 + (last ? spare : 0),
+          depths[r],
+        )
+        plates.push({
+          id: specs[i].id,
+          x: x + layout.halfWidth,
+          z: z + layout.halfDepth,
+          layout: linkRoads(layout, {
+            sideways: row.length > 1,
+            below: c === 0 && r < rowsIndex.length - 1,
+            above: c === 0 && r > 0,
+          }),
+        })
+        x += 2 * layout.halfWidth
+      })
+      z += 2 * depths[r]
     })
+    return plates
+  }
   const lotsOf = (plates: Neighbourhood[]): Placed[] =>
     plates.flatMap((n) =>
       n.layout.lots.map((l) => ({
@@ -178,16 +226,14 @@ export function worldLayout(specs: NeighbourhoodSpec[]): World {
       })),
     )
 
-  // Buildings of a plate could hide those of the plate behind it, if they are
-  // very tall: then only, move the rows apart.
-  let plates = place(0)
+  let plates = build(0)
   for (let more = 2; hidesSomething(lotsOf(plates)) && more < 200; more += 2) {
-    plates = place(more)
+    plates = build(more)
   }
 
   return {
-    neighbourhoods: plates.slice(0, specs.length),
-    wilds: plates.slice(specs.length),
+    neighbourhoods: plates,
+    wilds: [],
     halfWidth: Math.max(
       0,
       ...plates.map((n) => Math.abs(n.x) + n.layout.halfWidth),

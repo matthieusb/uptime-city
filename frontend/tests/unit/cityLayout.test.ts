@@ -135,7 +135,7 @@ describe('cityLayout', () => {
   it('lines the buildings along a road, on paved lots', () => {
     const layout = cityLayout(ids(13))
     const tileAt = tileMap(layout)
-    expect(layout.roads.length).toBe(2)
+    expect(layout.roads.length).toBe(3)
     for (const lot of layout.lots) {
       const distances = layout.roads.map((r) =>
         Math.abs(lot.z - roadZ(r, lot.x)),

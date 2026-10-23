@@ -55,9 +55,8 @@ describe('worldLayout', () => {
   })
 
   it('puts the neighbourhoods side by side on one ground, without a gap', () => {
-    const world = worldLayout(hosts)
-    const plates = [...world.neighbourhoods, ...world.wilds]
-    expect(plates.length).toBe(6)
+    const { neighbourhoods: plates } = worldLayout(hosts)
+    expect(plates.length).toBe(5)
     for (const a of plates) {
       // Every plate touches another one, to the side or above.
       const touching = plates.filter((b) => {
@@ -68,23 +67,59 @@ describe('worldLayout', () => {
         const depth = a.layout.halfDepth + b.layout.halfDepth
         return (
           (Math.abs(dx - width) < 1e-6 && dz < 1e-6) ||
-          (Math.abs(dz - depth) < 1e-6 && dx < 1e-6)
+          (Math.abs(dz - depth) < 1e-6 &&
+            dx < a.layout.halfWidth + b.layout.halfWidth)
         )
       })
       expect(touching.length).toBeGreaterThan(0)
     }
   })
 
-  it('gives every plate the same size', () => {
-    const plates = (w = worldLayout(hosts)) => [...w.neighbourhoods, ...w.wilds]
-    expect(new Set(plates().map((p) => p.layout.halfWidth)).size).toBe(1)
-    expect(new Set(plates().map((p) => p.layout.halfDepth)).size).toBe(1)
+  it('makes a neighbourhood smaller when its host has fewer services and vms', () => {
+    const [small] = worldLayout([spec('small')]).neighbourhoods
+    const [big] = worldLayout([spec('big', 3, 4, 5, 6, 7, 8, 9)]).neighbourhoods
+    expect(small.layout.halfWidth).toBeLessThan(big.layout.halfWidth)
   })
 
-  it('fills the free cells of the grid with wilderness, without buildings', () => {
-    const { wilds } = worldLayout(hosts)
-    expect(wilds.length).toBe(1)
-    expect(wilds[0].layout.lots).toEqual([])
+  it('makes the plates of a row as deep as each other, and the rows as wide', () => {
+    const world = worldLayout(hosts)
+    const rows = new Map<number, typeof world.neighbourhoods>()
+    for (const n of world.neighbourhoods) {
+      rows.set(n.z, [...(rows.get(n.z) ?? []), n])
+    }
+    for (const row of rows.values()) {
+      expect(new Set(row.map((p) => p.layout.halfDepth)).size).toBe(1)
+    }
+    const widths = [...rows.values()].map((row) =>
+      row.reduce((sum, p) => sum + 2 * p.layout.halfWidth, 0),
+    )
+    expect(new Set(widths).size).toBe(1)
+  })
+
+  it('has no wilderness: every plate is a neighbourhood', () => {
+    expect(worldLayout(hosts).wilds).toEqual([])
+  })
+
+  it('leaves no void on the ground, even with very tall hosts', () => {
+    const homelab = [
+      spec('a', 3, 9, 4),
+      spec('b', 12),
+      spec('c'),
+      spec('d', 2, 20),
+      spec('e', 5),
+      spec('f'),
+      spec('g', 30),
+    ]
+    const world = worldLayout(homelab)
+    const tiles = new Set<string>()
+    for (const n of [...world.neighbourhoods, ...world.wilds]) {
+      for (const t of n.layout.tiles) tiles.add(`${n.x + t.x},${n.z + t.z}`)
+    }
+    const xs = [...tiles].map((k) => Number(k.split(',')[0]))
+    const zs = [...tiles].map((k) => Number(k.split(',')[1]))
+    const [x0, x1] = [Math.min(...xs), Math.max(...xs)]
+    const [z0, z1] = [Math.min(...zs), Math.max(...zs)]
+    expect(tiles.size).toBe((x1 - x0 + 1) * (z1 - z0 + 1))
   })
 
   it('links the plates of a row with a straight road', () => {
@@ -108,11 +143,18 @@ describe('worldLayout', () => {
     const { neighbourhoods } = worldLayout(hosts)
     // Two plates, one above the other, in the same column.
     const top = neighbourhoods[0]
-    const below = neighbourhoods.find((n) => n.x === top.x && n.z > top.z)!
-    const column = Math.round(-top.layout.halfWidth + 0.5) + 2
+    const below = neighbourhoods.find(
+      (n) =>
+        n.z > top.z &&
+        n.x - n.layout.halfWidth === top.x - top.layout.halfWidth,
+    )!
     const roadsAt = (n: (typeof neighbourhoods)[number]) =>
       n.layout.tiles
-        .filter((t) => t.x === column && t.kind === 'road')
+        .filter(
+          (t) =>
+            t.x === Math.round(-n.layout.halfWidth + 0.5) + 2 &&
+            t.kind === 'road',
+        )
         .map((t) => t.z + n.z)
     const joined = [...roadsAt(top), ...roadsAt(below)].sort((p, q) => p - q)
     // One unbroken line of tiles from the first road to the second one.

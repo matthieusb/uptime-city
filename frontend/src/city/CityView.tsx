@@ -173,10 +173,13 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
             .filter((lot) => !lot.decor)
             .map((lot) => {
               const group = hosts.get(lot.id)!
+              // The floors are stacked from the ground up, so the first
+              // service in alphabetical order goes on the top floor.
+              const floors = [...group.services].reverse()
               return {
                 lot,
                 name: group.host.kind === 'vm' ? group.host.name : '',
-                services: group.services.map((s) => s.name),
+                services: floors.map((s) => s.name),
                 labelSide: sides.get(lot.id),
                 badge: group.host.kind === 'vm' ? VM_BADGE : SERVICES_BADGE,
                 ruined: isNuked,
@@ -184,7 +187,7 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
                   ? nukedState(1 + group.services.length)
                   : buildingState(
                       history.get(group.host.id),
-                      group.services.map((s) => history.get(s.id)),
+                      floors.map((s) => history.get(s.id)),
                     ),
               }
             })

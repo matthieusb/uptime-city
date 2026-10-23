@@ -28,13 +28,13 @@ export const GROUND_HEIGHT = 2.2
 
 // Screen distance between two buildings of a road: the width of a building
 // on screen (BUILDING_WIDTH * sqrt(2)), and a margin.
-const SLOT = BUILDING_WIDTH * Math.SQRT2 + 1.7
+const SLOT = BUILDING_WIDTH * Math.SQRT2 + 1.05
 // Distance from the road center line to a building center.
 const SIDE = BUILDING_WIDTH / 2 + 2.2
 // Half the side of the paved square around a building.
 const PLAZA = BUILDING_WIDTH / 2 + 0.6
 // Buildings per road, before the city adds a road further inland.
-const ROW_MAX = 8
+const ROW_MAX = 6
 // Least distance between two roads, along Z.
 const ROW_GAP = 26
 // Shape of the winding roads.
@@ -43,11 +43,12 @@ const AMPLITUDE = 1.2
 // Distance from the road center line to the middle of a lane.
 const LANE = 0.3
 // Grass on each side of the outermost buildings.
-const X_MARGIN = 3
-const MIN_HALF_WIDTH = 10
+const X_MARGIN = 1.5
+const MIN_HALF_WIDTH = 5
 // Tiles from the road at the back to the edge of the ground, and from the
 // front road to the other edge.
-const DEPTH = 14
+const BACK = 9
+const FRONT = 12
 
 export type TileKind =
   | 'water'
@@ -379,6 +380,9 @@ export function cityLayout(
   theme: Theme = 'coastal',
   // At least this wide, for the ground to fit next to others.
   minHalfWidth = MIN_HALF_WIDTH,
+  // At least this deep, extending the hills at the back. The front is always
+  // at the same distance from the front road, so that plates line up.
+  minHalfDepth = 0,
 ): CityLayout {
   const ids = hosts.map((h) => h.id)
   // Raw coordinates: the front road runs along z = 0. Everything is moved
@@ -409,14 +413,16 @@ export function cityLayout(
   const coastal = theme === 'coastal'
   const shore = (x: number) =>
     coastal
-      ? 7.5 + 0.8 * Math.sin(x / 5.3 + 0.7) + 0.5 * Math.sin(x / 2.1)
+      ? 5.5 + 0.8 * Math.sin(x / 5.3 + 0.7) + 0.5 * Math.sin(x / 2.1)
       : Infinity
   const sea = (x: number) => shore(x) + 2.6 + 0.6 * Math.sin(x / 3.7 + 2)
   const hills = (x: number) =>
-    backZ - 8.5 + 1.2 * Math.sin(x / 6.1 + 1.3) + 0.6 * Math.sin(x / 2.9)
-  const zMin = Math.floor(backZ - DEPTH)
+    backZ - 5.5 + 1.2 * Math.sin(x / 6.1 + 1.3) + 0.6 * Math.sin(x / 2.9)
+  const zMax = FRONT
   // An even number of tiles each side of the center.
-  const zMax = DEPTH + mod(zMin + DEPTH, 2)
+  let zMin = Math.floor(backZ - BACK)
+  if (mod(zMax - zMin, 2) === 1) zMin--
+  while ((zMax - zMin) / 2 + 0.5 < minHalfDepth) zMin -= 2
 
   // Terrain
   const rows = zMax - zMin + 1
@@ -569,7 +575,7 @@ export function cityLayout(
     switch (kind) {
       case 'forest':
         for (const { tile } of blob) {
-          if (random() > 0.7) continue
+          if (random() > 0.3) continue
           const pick = random()
           plant(tile, pick < 0.5 ? 'oak' : pick < 0.85 ? 'pine' : 'fruit')
         }
@@ -615,7 +621,7 @@ export function cityLayout(
     }
   }
   for (const tile of zone) {
-    if (!used.has(`${tile.x},${tile.z}`) && random() < 0.02) {
+    if (!used.has(`${tile.x},${tile.z}`) && random() < 0.008) {
       plant(tile, random() < 0.7 ? 'oak' : 'fruit')
     }
   }
@@ -626,9 +632,9 @@ export function cityLayout(
       tile.kind === 'hill' || (tile.kind === 'grass' && tile.z <= hills(tile.x))
     if (!wild || blocked.has(`${tile.x},${tile.z}`)) continue
     const pick = random()
-    if (pick < 0.28) plant(tile, 'pine')
-    else if (pick < 0.32) plant(tile, 'oak')
-    else if (pick < 0.35) {
+    if (pick < 0.12) plant(tile, 'pine')
+    else if (pick < 0.14) plant(tile, 'oak')
+    else if (pick < 0.17) {
       rocks.push({
         x: tile.x + jitter(0.4),
         y: tile.top,
@@ -652,8 +658,8 @@ export function cityLayout(
   )
   for (const tile of beach) {
     const pick = random()
-    if (pick < 0.06) plant(tile, 'palm', 0.3)
-    else if (pick < 0.11) {
+    if (pick < 0.03) plant(tile, 'palm', 0.3)
+    else if (pick < 0.08) {
       umbrellas.push({
         x: tile.x + jitter(0.3),
         y: tile.top,
@@ -663,7 +669,7 @@ export function cityLayout(
     }
   }
 
-  const boats: Road[] = (coastal ? [11.5, 13] : []).map((z, n) => ({
+  const boats: Road[] = (coastal ? [9, 10.5] : []).map((z, n) => ({
     z,
     amplitude: 0.5,
     phase: n * 2.1,
