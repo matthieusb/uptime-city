@@ -145,7 +145,7 @@ What exists today, one sentence per feature (see `.claude/rules/document-complet
 - **Config**: YAML physical hosts, each with its own check, its services and its vm-hosts (which have services only), using `icmp://`, `tcp://` and `http(s)://` URLs, without `enabled` or `dns` yet, and each `http(s)://` check needs a `[STATUS]` condition. See `config/models.py` and `tests/test_config.py`.
 - **Vm-hosts**: the API tells each endpoint's `kind` (physical, vm or service) and a vm-host's `parent_id`; a down physical host does not affect its vm-hosts yet. See `config/models.py`, `tests/test_config.py` and `tests/test_main.py`.
 - **Host down**: a down host's services are recorded as down with `host_down`, without being probed. See `monitor/scheduler.py` and `tests/test_monitor.py`.
-- **HTTP probe**: a check succeeds when every condition passes. See `probes/http.py` and `tests/test_http_probe.py`.
+- **HTTP probe**: a check succeeds when every condition passes, and redirects are not followed, so a service that redirects needs a condition like `[STATUS] < 400`. See `probes/http.py` and `tests/test_http_probe.py`.
 - **TCP probe**: a check succeeds when the connection opens in time. See `probes/tcp.py` and `tests/test_tcp_probe.py`.
 - **ICMP probe**: the default probe for any other scheme. See `probes/icmp.py` and `tests/test_monitor.py`.
 - **Conditions**: numeric comparisons on `[STATUS]` and `[RESPONSE_TIME]`, for HTTP only. See `conditions/evaluate.py` and `tests/test_http_probe.py`.
