@@ -1,15 +1,24 @@
 import { MapControls } from '@react-three/drei'
 import { Canvas, useThree } from '@react-three/fiber'
 import { useQueries } from '@tanstack/react-query'
-import { useLayoutEffect, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { EndpointInfo } from '../api/client'
 import { historyQuery } from '../api/queries'
 import { allHosts, groupByHost } from '../domain/hosts'
 import { buildingState, latestStatus, nukedState } from '../domain/status'
 import { serviceLabelSides } from './layout'
 import Buildings, { Label, type BuildingProps } from './Buildings'
+import { fitZoom, focusFor, plateFrame } from './focus'
+import {
+  Backdrop,
+  CameraRig,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  type Controls,
+} from './FocusRig'
 import Nuke from './effects/Nuke'
 import { NUKE_HEIGHT } from './effects/nukeShape'
+import Plate from './Plate'
 import Scenery from './Scenery'
 import type { Badge } from './textures'
 import { nukedLayout, worldFrame, worldLayout, type Frame } from './world'
@@ -29,12 +38,6 @@ function cameraPosition(frame: Frame): [number, number, number] {
   ]
 }
 
-// What the map controls expose.
-interface Controls {
-  target: { set: (x: number, y: number, z: number) => void }
-  update: () => void
-}
-
 // Zooms so that the whole map, up to its tallest building, fits in the
 // canvas. The map can then be dragged and zoomed.
 function FitCamera({ frame }: { frame: Frame }) {
@@ -44,16 +47,19 @@ function FitCamera({ frame }: { frame: Frame }) {
     const { camera, controls } = get()
     const [x, y, z] = cameraPosition(frame)
     camera.position.set(x, y, z)
-    camera.zoom = Math.min(
-      width / (frame.width * 1.05),
-      height / (frame.height * 1.1),
-    )
+    camera.zoom = fitZoom(frame, width, height)
     camera.updateProjectionMatrix()
     const orbit = controls as unknown as Controls | null
     orbit?.target.set(...frame.target)
     orbit?.update()
   }, [get, frame, width, height])
   return null
+}
+
+// From the point looked at to the camera.
+function offset(frame: Frame): [number, number, number] {
+  const [x, y, z] = cameraPosition(frame)
+  return [x - frame.target[0], y - frame.target[1], z - frame.target[2]]
 }
 
 // Smaller maps are framed as if they had a building this tall.
@@ -118,16 +124,44 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
     ...world.neighbourhoods.flatMap((n) => n.layout.lots.map((l) => l.height)),
   )
   const frame = useMemo(() => worldFrame(world, top), [world, top])
-  const shadowBox = Math.hypot(world.halfWidth, world.halfDepth) + 4
+  // The neighbourhood in focus, lifted in front of the others.
+  const [focusedId, setFocusedId] = useState<string | null>(null)
+  const focus = useMemo(
+    () => (focusedId ? focusFor(world, focusedId, top) : null),
+    [world, focusedId, top],
+  )
+  const focusFrame = useMemo(() => {
+    const plate = world.neighbourhoods.find((n) => n.id === focusedId)
+    return plate ? plateFrame(plate, top) : null
+  }, [world, focusedId, top])
+  // A neighbourhood that is gone cannot stay in focus.
+  useEffect(() => {
+    if (focusedId && !focus) setFocusedId(null)
+  }, [focusedId, focus])
+  // The focus ends with a click anywhere but on the focused neighbourhood:
+  // on the dimmed map, or outside of the 3D view.
+  const unfocus = () => setFocusedId(null)
+  const view = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!focusedId) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (!view.current?.contains(e.target as Node)) setFocusedId(null)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [focusedId])
+  const lift = focus ? Math.hypot(...focus.lift) : 0
+  const shadowBox = Math.hypot(world.halfWidth, world.halfDepth) + 4 + lift
   const lightDistance = shadowBox * 1.5 + 50
 
   return (
-    <div className="city" data-testid="city-view">
+    <div ref={view} className="city" data-testid="city-view">
       <Canvas
         orthographic
         dpr={PIXEL_RATIO}
         gl={{ antialias: false }}
         shadows="basic"
+        onPointerMissed={unfocus}
         camera={{
           position: cameraPosition(frame),
           near: 0.1,
@@ -135,12 +169,14 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
         }}
       >
         <FitCamera frame={frame} />
+        <CameraRig offset={offset(frame)} focusFrame={focusFrame} />
+        <Backdrop focus={focus} frame={frame} onClose={unfocus} />
         <MapControls
           makeDefault
           enableRotate={false}
           screenSpacePanning
-          minZoom={1}
-          maxZoom={60}
+          minZoom={MIN_ZOOM}
+          maxZoom={MAX_ZOOM}
           target={frame.target}
         />
         <hemisphereLight args={['#dff3ff', '#5a4a3a', 1.2]} />
@@ -192,7 +228,13 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
               }
             })
           return (
-            <group key={n.id} position={[n.x, 0, n.z]}>
+            <Plate
+              key={n.id}
+              plate={n}
+              focus={focusedId === n.id ? focus : null}
+              pickable={focusedId === null || focusedId === n.id}
+              onSelect={() => setFocusedId(n.id)}
+            >
               <Scenery layout={layout} nuked={isNuked} />
               <Buildings buildings={buildings} />
               {isNuked && <Nuke />}
@@ -204,7 +246,7 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
                 size={1.3}
                 order={10}
               />
-            </group>
+            </Plate>
           )
         })}
       </Canvas>
