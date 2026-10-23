@@ -219,9 +219,21 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
           shadow-camera-far={4 * lightDistance}
         />
         {world.wilds.map((n) => (
-          <group key={n.id} position={[n.x, 0, n.z]}>
+          <Plate
+            key={n.id}
+            plate={n}
+            focus={null}
+            inert
+            pose={
+              focusFrame && focusedId
+                ? { center: focusFrame.target, scale: FAR }
+                : null
+            }
+            pickable={false}
+            onSelect={unfocus}
+          >
             <Scenery layout={n.layout} />
-          </group>
+          </Plate>
         ))}
         {world.neighbourhoods.map((n) => {
           const layout = layouts.get(n.id) ?? n.layout

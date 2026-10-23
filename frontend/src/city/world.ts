@@ -1,10 +1,12 @@
 // Pure layout of the whole map, independent of three.js: one neighbourhood
 // per physical host. The neighbourhoods are the plates of one ground, side by
-// side in rows, each with its own look and its own size, and roads run from
-// one to the next. There is never any void between them.
+// side in rows, each with its own look and a size that follows its host's
+// score, and roads run from one to the next. Joining tiles of wild ground fill
+// what no neighbourhood covers, so that there is never any void.
 import {
   CRATER_TOP,
   cityLayout,
+  fillerLayout,
   HALF_SCREEN_WIDTH,
   ROAD_TOP,
   type CityLayout,
@@ -60,22 +62,25 @@ interface Placed {
   x: number
   z: number
   height: number
+  // The row of neighbourhoods it stands in.
+  row: number
 }
 
-// Whether a building could cover part of another on screen, as in layout.ts.
-function hidesSomething(lots: Placed[]): boolean {
+// The row of the first building that could cover part of a building of
+// another row on screen, as in layout.ts, or -1 if there is none.
+function hiderRow(lots: Placed[]): number {
   for (const a of lots) {
     for (const b of lots) {
-      if (a === b) continue
+      if (a.row === b.row) continue
       const sideways = Math.abs(a.x - b.x - (a.z - b.z)) / Math.SQRT2
       const depth = (a.x - b.x + (a.z - b.z)) / Math.SQRT2
       const reach = a.height * Math.sqrt(3) + 2 * HALF_SCREEN_WIDTH
       if (sideways < 2 * HALF_SCREEN_WIDTH + 1 && depth > 0 && depth < reach) {
-        return true
+        return a.row
       }
     }
   }
-  return false
+  return -1
 }
 
 // Roads are 2 tiles wide. One crosses every row of plates, and one links the
@@ -120,129 +125,259 @@ function linkRoads(
   }
 }
 
+// How much a physical host weighs in the size of its neighbourhood: the host
+// itself, its own services, its vm-hosts and the services on these.
+const HOST_SCORE = 20
+const SERVICE_SCORE = 5
+const VM_SCORE = 15
+const VM_SERVICE_SCORE = 6
+
+export function sizeScore(buildings: HostSpec[]): number {
+  const [host, ...vms] = buildings
+  return (
+    HOST_SCORE +
+    SERVICE_SCORE * (host?.services ?? 0) +
+    vms.reduce((sum, vm) => sum + VM_SCORE + VM_SERVICE_SCORE * vm.services, 0)
+  )
+}
+
+// Neighbourhoods are about this much wider than deep.
+const ASPECT = 1.3
+
+const odd = (n: number) =>
+  Math.ceil(n) % 2 === 0 ? Math.ceil(n) + 1 : Math.ceil(n)
+
 interface Size {
   width: number
   depth: number
 }
 
-// Cuts the plates into rows of the given length: a row is as deep as its
-// deepest plate, and the map as wide as its widest row.
-function rowsOf<T>(items: T[], columns: number): T[][] {
-  const rows: T[][] = []
-  for (let i = 0; i < items.length; i += columns) {
-    rows.push(items.slice(i, i + columns))
+// How much bigger than the one before it, at least, a neighbourhood is when
+// its score is higher.
+const GROWTH = 1.08
+
+// The size of every neighbourhood, in tiles: the bigger its score, the bigger
+// its area, and never too small for its buildings. Going up the scores, each
+// area is at least that of the previous score, a little more.
+function sizesOf(natural: Size[], scores: number[]): Size[] {
+  const sizes: Size[] = []
+  const ascending = scores
+    .map((_, i) => i)
+    .sort((a, b) => scores[a] - scores[b])
+  let previous = 0
+  let before = -Infinity
+  for (const i of ascending) {
+    const own = natural[i].width * natural[i].depth
+    // The same score, the same area, or the nearest the buildings allow.
+    const same = scores[i] === before
+    sizes[i] = fit(
+      natural[i],
+      Math.max(own, same ? previous : previous * GROWTH),
+    )
+    const area = sizes[i].width * sizes[i].depth
+    previous = same ? Math.max(previous, area) : area
+    before = scores[i]
+  }
+  return sizes
+}
+
+// The size of at least this area, odd on both sides and not smaller than
+// `min`, wide first or deep first, whichever overshoots the area the least.
+function fit(min: Size, area: number): Size {
+  const wide = odd(Math.max(min.width, Math.sqrt(area * ASPECT)))
+  const deep = odd(Math.max(min.depth, Math.sqrt(area / ASPECT)))
+  const options: Size[] = [
+    { width: wide, depth: odd(Math.max(min.depth, area / wide)) },
+    { width: odd(Math.max(min.width, area / deep)), depth: deep },
+  ]
+  return options.sort((p, q) => p.width * p.depth - q.width * q.depth)[0]
+}
+
+// Cuts the neighbourhoods, deepest first, into rows no wider than `limit`.
+function shelves(order: number[], sizes: Size[], limit: number): number[][] {
+  const rows: number[][] = []
+  let width = 0
+  for (const i of order) {
+    if (rows.length === 0 || width + sizes[i].width > limit) {
+      rows.push([])
+      width = 0
+    }
+    rows[rows.length - 1].push(i)
+    width += sizes[i].width
   }
   return rows
 }
 
-// How many plates side by side make the map as square as possible, without
-// wasting much ground on padding.
-function chooseColumns(sizes: Size[]): number {
+const rowWidth = (row: number[], sizes: Size[]) =>
+  row.reduce((sum, i) => sum + sizes[i].width, 0)
+const rowDepth = (row: number[], sizes: Size[]) =>
+  Math.max(...row.map((i) => sizes[i].depth))
+
+// The rows that make the map as square as possible, without wasting much
+// ground on joining tiles.
+function chooseRows(sizes: Size[]): number[][] {
+  const order = sizes
+    .map((_, i) => i)
+    .sort((a, b) => sizes[b].depth - sizes[a].depth || a - b)
   const area = sizes.reduce((sum, s) => sum + s.width * s.depth, 0)
-  let best = 1
+  const widest = Math.max(...sizes.map((s) => s.width))
+  const total = sizes.reduce((sum, s) => sum + s.width, 0)
+  let best: number[][] = []
   let bestScore = Infinity
-  for (let columns = 1; columns <= sizes.length; columns++) {
-    const rows = rowsOf(sizes, columns)
-    const width = Math.max(
-      ...rows.map((row) => row.reduce((sum, s) => sum + s.width, 0)),
-    )
-    const depth = rows.reduce(
-      (sum, row) => sum + Math.max(...row.map((s) => s.depth)),
-      0,
-    )
-    const score = Math.abs(Math.log(width / depth)) + (width * depth) / area
-    if (score < bestScore) [best, bestScore] = [columns, score]
+  for (let limit = widest; limit <= total; limit++) {
+    const rows = shelves(order, sizes, limit)
+    const width = Math.max(...rows.map((r) => rowWidth(r, sizes)))
+    const depth = rows.reduce((sum, r) => sum + rowDepth(r, sizes), 0)
+    const score =
+      Math.abs(Math.log(width / depth)) + (2 * (width * depth - area)) / area
+    if (score < bestScore) [best, bestScore] = [rows, score]
   }
   return best
 }
 
 export function worldLayout(specs: NeighbourhoodSpec[]): World {
   const themeOf = (i: number) => THEMES[i % THEMES.length]
+  // The joining tiles look different from the neighbourhood they touch.
+  const otherThan = (i: number) => THEMES[(i + 1) % THEMES.length]
   const items = specs.map(withDecor)
-
-  // Every neighbourhood is as big as its buildings need: the less services
-  // and vms, the smaller. The plates of a row are as deep as the deepest of
-  // them, and every row as wide as the widest, so that they fit together.
-  const natural = items.map((hosts, i) => cityLayout(hosts, themeOf(i)))
-  const columns = specs.length
-    ? chooseColumns(
-        natural.map((l) => ({
-          width: 2 * l.halfWidth,
-          depth: 2 * l.halfDepth,
-        })),
-      )
-    : 0
-  const rowsIndex = rowsOf(
-    specs.map((_, i) => i),
-    columns,
-  )
-  const rowWidth = (row: number[]) =>
-    row.reduce((sum, i) => sum + 2 * natural[i].halfWidth, 0)
-  const mapWidth = Math.max(0, ...rowsIndex.map(rowWidth))
-
-  // The plates touch each other: when buildings of a plate could hide those
-  // of the plate behind it, the plates all grow deeper instead of moving apart.
-  const build = (more: number): Neighbourhood[] => {
-    const depths = rowsIndex.map(
-      (row) => Math.max(...row.map((i) => natural[i].halfDepth)) + more / 2,
-    )
-    const height = 2 * depths.reduce((sum, d) => sum + d, 0)
-    const plates: Neighbourhood[] = []
-    let z = -height / 2
-    rowsIndex.forEach((row, r) => {
-      // The last plate of a row takes the width the row lacks.
-      const spare = (mapWidth - rowWidth(row)) / 2
-      let x = -mapWidth / 2
-      row.forEach((i, c) => {
-        const last = c === row.length - 1
-        const layout = cityLayout(
-          items[i],
-          themeOf(i),
-          natural[i].halfWidth - 0.5 + (last ? spare : 0),
-          depths[r],
-        )
-        plates.push({
-          id: specs[i].id,
-          x: x + layout.halfWidth,
-          z: z + layout.halfDepth,
-          layout: linkRoads(layout, {
-            sideways: row.length > 1,
-            below: c === 0 && r < rowsIndex.length - 1,
-            above: c === 0 && r > 0,
-          }),
-        })
-        x += 2 * layout.halfWidth
-      })
-      z += 2 * depths[r]
-    })
-    return plates
+  if (specs.length === 0) {
+    return { neighbourhoods: [], wilds: [], halfWidth: 0, halfDepth: 0 }
   }
-  const lotsOf = (plates: Neighbourhood[]): Placed[] =>
-    plates.flatMap((n) =>
+
+  // Each neighbourhood is as big as its score says, and the map is made of
+  // rows of them, as square as possible. Where a neighbourhood is smaller than
+  // its row, a joining tile fills the rest.
+  const natural = items.map((hosts, i) => cityLayout(hosts, themeOf(i)))
+  const sizes = sizesOf(
+    natural.map((l) => ({ width: 2 * l.halfWidth, depth: 2 * l.halfDepth })),
+    specs.map((s) => sizeScore(s.buildings)),
+  )
+  // The tallest buildings stand at the back, where they hide the least.
+  const tallest = (row: number[]) =>
+    Math.max(...row.flatMap((i) => natural[i].lots.map((l) => l.height)))
+  const rows = chooseRows(sizes).sort((a, b) => tallest(b) - tallest(a))
+  const mapWidth = Math.max(...rows.map((r) => rowWidth(r, sizes)))
+  const layouts = new Map<number, CityLayout>()
+  rows.forEach((row, r) =>
+    row.forEach((i, c) =>
+      layouts.set(
+        i,
+        linkRoads(
+          cityLayout(
+            items[i],
+            themeOf(i),
+            (sizes[i].width - 1) / 2,
+            sizes[i].depth / 2,
+          ),
+          {
+            sideways: row.length > 1,
+            below: c === 0 && r < rows.length - 1,
+            above: c === 0 && r > 0,
+          },
+        ),
+      ),
+    ),
+  )
+
+  // When buildings of a row could hide those of a row behind it, that row
+  // grows deeper, with joining tiles, instead of moving apart.
+  const build = (extra: number[]): World => {
+    const neighbourhoods = new Map<number, Neighbourhood>()
+    const wilds: Neighbourhood[] = []
+    const wild = (
+      width: number,
+      depth: number,
+      x: number,
+      z: number,
+      theme: Theme,
+      roadColumn = false,
+    ) => {
+      const id = `filler-${wilds.length}`
+      wilds.push({
+        id,
+        x,
+        z,
+        layout: fillerLayout(width, depth, theme, id, roadColumn),
+      })
+    }
+    let back = 0
+    rows.forEach((row, r) => {
+      const height = rowDepth(row, sizes) + extra[r]
+      let left = 0
+      row.forEach((i, c) => {
+        const { width, depth } = sizes[i]
+        // The neighbourhoods stand against the front of their row.
+        neighbourhoods.set(i, {
+          id: specs[i].id,
+          x: left + width / 2,
+          z: back + height - depth / 2,
+          layout: layouts.get(i)!,
+        })
+        if (height > depth) {
+          wild(
+            width,
+            height - depth,
+            left + width / 2,
+            back + (height - depth) / 2,
+            otherThan(i),
+            c === 0,
+          )
+        }
+        left += width
+      })
+      if (left < mapWidth) {
+        const last = row[row.length - 1]
+        wild(
+          mapWidth - left,
+          height,
+          left + (mapWidth - left) / 2,
+          back + height / 2,
+          otherThan(last),
+        )
+      }
+      back += height
+    })
+    // The middle of the map is the origin.
+    const move = (n: Neighbourhood): Neighbourhood => ({
+      ...n,
+      x: n.x - mapWidth / 2,
+      z: n.z - back / 2,
+    })
+    const plates = specs.map((_, i) => move(neighbourhoods.get(i)!))
+    const joins = wilds.map(move)
+    const all = [...plates, ...joins]
+    return {
+      neighbourhoods: plates,
+      wilds: joins,
+      halfWidth: Math.max(
+        ...all.map((n) => Math.abs(n.x) + n.layout.halfWidth),
+      ),
+      halfDepth: Math.max(
+        ...all.map((n) => Math.abs(n.z) + n.layout.halfDepth),
+      ),
+    }
+  }
+  const rowOf = new Map<number, number>()
+  rows.forEach((row, r) => row.forEach((i) => rowOf.set(i, r)))
+  const lotsOf = (world: World): Placed[] =>
+    world.neighbourhoods.flatMap((n, i) =>
       n.layout.lots.map((l) => ({
         x: l.x + n.x,
         z: l.z + n.z,
         height: l.height,
+        row: rowOf.get(i)!,
       })),
     )
 
-  let plates = build(0)
-  for (let more = 2; hidesSomething(lotsOf(plates)) && more < 200; more += 2) {
-    plates = build(more)
+  const extra = rows.map(() => 0)
+  let world = build(extra)
+  for (let tries = 0; tries < 500; tries++) {
+    const hider = hiderRow(lotsOf(world))
+    if (hider < 0) break
+    extra[hider] += 2
+    world = build(extra)
   }
-
-  return {
-    neighbourhoods: plates,
-    wilds: [],
-    halfWidth: Math.max(
-      0,
-      ...plates.map((n) => Math.abs(n.x) + n.layout.halfWidth),
-    ),
-    halfDepth: Math.max(
-      0,
-      ...plates.map((n) => Math.abs(n.z) + n.layout.halfDepth),
-    ),
-  }
+  return world
 }
 
 // The ground of a neighbourhood after a nuke: the decoration, the trees, the

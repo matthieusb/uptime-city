@@ -713,3 +713,64 @@ export function cityLayout(
     theme,
   }
 }
+
+// A joining tile of wild ground, without buildings, to make up the part of a
+// map that no neighbourhood fills. Any size: an even size has its tiles on
+// half-integer coordinates, so that it fits against the others.
+export function fillerLayout(
+  width: number,
+  depth: number,
+  theme: Theme,
+  seed: string,
+  // Whether the road along the left edge of the map runs through it.
+  roadColumn = false,
+): CityLayout {
+  const random = seededRandom(hash(`filler:${seed}`))
+  const tiles: Tile[] = []
+  const trees: Tree[] = []
+  const rocks: Point[] = []
+  for (let i = 0; i < width; i++) {
+    for (let j = 0; j < depth; j++) {
+      const x = i - (width - 1) / 2
+      const z = j - (depth - 1) / 2
+      const road = roadColumn && (i === 2 || i === 3)
+      const kind: TileKind = road ? 'road' : 'grass'
+      const top = TOPS[kind]
+      tiles.push({ x, z, kind, top })
+      if (road) continue
+      const pick = random()
+      // Sparse: this ground is only there to join the neighbourhoods.
+      if (pick < 0.04 && !(theme === 'desert' && random() < 0.7)) {
+        const kind: TreeKind =
+          theme === 'snow' ? 'pine' : theme === 'desert' ? 'palm' : 'oak'
+        const scale = 0.8 + random() * 0.45
+        trees.push({
+          x: x + (random() - 0.5) * 0.5,
+          y: top,
+          z: z + (random() - 0.5) * 0.5,
+          scale,
+          kind,
+          height: top + TREE_HEIGHTS[kind] * scale,
+        })
+      } else if (pick < 0.055) {
+        rocks.push({ x: x + (random() - 0.5) * 0.4, y: top, z })
+      }
+    }
+  }
+  return {
+    lots: [],
+    tiles,
+    roads: [],
+    patches: [],
+    trees,
+    flowers: [],
+    reeds: [],
+    rocks,
+    umbrellas: [],
+    pier: [],
+    boats: [],
+    halfWidth: width / 2,
+    halfDepth: depth / 2,
+    theme,
+  }
+}

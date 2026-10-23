@@ -22,6 +22,8 @@ interface Props {
   pose: Pose | null
   // Whether the pointer can pick it: not while another one is in focus.
   pickable: boolean
+  // A joining tile, which only follows the others: it is never picked.
+  inert?: boolean
   onSelect: () => void
   children: ReactNode
 }
@@ -32,7 +34,8 @@ export default function Plate({
   plate,
   focus,
   pose,
-  pickable,
+  pickable: canPick,
+  inert = false,
   onSelect,
   children,
 }: Props) {
@@ -46,6 +49,7 @@ export default function Plate({
   // The last lift stays, to come back down after the focus is gone.
   const lift = useRef<Focus['lift']>([0, 0, 0])
   if (focus) lift.current = focus.lift
+  const pickable = canPick && !inert
   const [hovered, setHovered] = useState(false)
   const shown = hovered && pickable && !focus
   const { halfWidth, halfDepth, lots } = plate.layout

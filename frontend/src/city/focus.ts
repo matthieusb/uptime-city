@@ -78,7 +78,7 @@ export function focusFor(
 ): Focus | null {
   const focused = world.neighbourhoods.find((n) => n.id === id)
   if (!focused) return null
-  const others = world.neighbourhoods
+  const others = [...world.neighbourhoods, ...world.wilds]
     .filter((n) => n !== focused)
     .flatMap((n) => corners(n, top, center, FAR))
   const behind = Math.max(-Infinity, ...others)
