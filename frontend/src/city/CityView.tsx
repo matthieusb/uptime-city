@@ -18,9 +18,10 @@ import {
 } from './FocusRig'
 import Nuke from './effects/Nuke'
 import { NUKE_HEIGHT } from './effects/nukeShape'
+import LabelLegend from './LabelLegend'
+import { ALL_LABELS, badgeOf, DEFAULT_LABELS, type LabelKind } from './labels'
 import Plate from './Plate'
 import Scenery from './Scenery'
-import type { Badge } from './textures'
 import { nukedLayout, worldFrame, worldLayout, type Frame } from './world'
 
 // Render at the screen's native resolution (up to 2x on hi-dpi screens). The
@@ -65,9 +66,9 @@ function offset(frame: Frame): [number, number, number] {
 // Smaller maps are framed as if they had a building this tall.
 const MIN_TOP = 6
 
-const VM_BADGE: Badge = { text: 'VM', color: '#4fa6e0' }
-const SERVICES_BADGE: Badge = { text: 'services', color: '#f5a623' }
-const NEIGHBOURHOOD_BADGE: Badge = { text: 'host', color: '#c9d1d9' }
+const VM_BADGE = badgeOf('vm')
+const SERVICES_BADGE = badgeOf('services')
+const NEIGHBOURHOOD_BADGE = badgeOf('host')
 
 export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
   // One neighbourhood per physical host, one building per vm-host and one for
@@ -124,8 +125,18 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
     ...world.neighbourhoods.flatMap((n) => n.layout.lots.map((l) => l.height)),
   )
   const frame = useMemo(() => worldFrame(world, top), [world, top])
+  // The kinds of label to show.
+  const [chosen, setChosen] = useState<ReadonlySet<LabelKind>>(DEFAULT_LABELS)
+  const toggleLabel = (kind: LabelKind) =>
+    setChosen((now) => {
+      const next = new Set(now)
+      if (!next.delete(kind)) next.add(kind)
+      return next
+    })
   // The neighbourhood in focus, lifted in front of the others.
   const [focusedId, setFocusedId] = useState<string | null>(null)
+  // The legend only applies to the whole map: in focus, every label shows.
+  const labels = focusedId ? ALL_LABELS : chosen
   const focusFrame = useMemo(() => {
     const plate = world.neighbourhoods.find((n) => n.id === focusedId)
     if (!plate) return null
@@ -229,6 +240,9 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
                 services: floors.map((s) => s.name),
                 labelSide: sides.get(lot.id),
                 badge: group.host.kind === 'vm' ? VM_BADGE : SERVICES_BADGE,
+                showLabel: labels.has(
+                  group.host.kind === 'vm' ? 'vm' : 'services',
+                ),
                 ruined: isNuked,
                 state: isNuked
                   ? nukedState(1 + group.services.length)
@@ -258,7 +272,7 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
               <Buildings buildings={buildings} />
               {isNuked && <Nuke />}
               {/* In focus, its name is shown at the top left of the view. */}
-              {focusedId !== n.id && (
+              {focusedId !== n.id && labels.has('host') && (
                 <Label
                   text={names.get(n.id) ?? n.id}
                   badge={NEIGHBOURHOOD_BADGE}
@@ -272,6 +286,7 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
           )
         })}
       </Canvas>
+      {!focusedId && <LabelLegend shown={chosen} onToggle={toggleLabel} />}
       {focusedId && (
         <div className="city-title" data-testid="city-title">
           <span className="city-title-name">

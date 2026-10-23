@@ -22,6 +22,8 @@ export interface BuildingProps {
   labelSide?: 'left' | 'right'
   // Tells what the building is, next to its name.
   badge?: Badge
+  // Whether the name and badge of the building show.
+  showLabel?: boolean
   state: BuildingState
   // Already in ruins, without falling before our eyes.
   ruined?: boolean
@@ -98,6 +100,7 @@ function Building({
   services,
   labelSide = 'right',
   badge,
+  showLabel = true,
   state,
   ruined = false,
 }: BuildingProps) {
@@ -187,7 +190,7 @@ function Building({
           burning && <Fire key={i} id={`${lot.id}:${i}`} y={floorBase(i)} />,
       )}
       {state.collapsed && <Fire id={lot.id} y={RUBBLE_HEIGHT / 2} smoke />}
-      <Label text={name} y={labelY} badge={badge} size={name ? 1 : 1.4} />
+      {showLabel && <Label text={name} y={labelY} badge={badge} />}
       {/* Beside each floor, on the side of the building with room, on screen. Only a
           standing building has floors to point at. */}
       {!state.collapsed &&

@@ -307,3 +307,52 @@ body {
   color: var(--bg);
   border-radius: 999px;
 }
+
+/* The checklist of label kinds, over the top right of the 3D view. */
+.city-legend {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  gap: 0.35rem;
+  min-width: 13rem;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  color: var(--text);
+  background: rgba(15, 17, 21, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.city-legend-title {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.city-legend label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0;
+  cursor: pointer;
+}
+
+.city-legend input {
+  flex: none;
+  margin: 0;
+}
+
+.city-legend .city-badge {
+  margin-left: auto;
+  padding: 0 0.45rem;
+  font-family: monospace;
+  font-size: 0.7rem;
+  color: var(--bg);
+  border-radius: 999px;
+}
