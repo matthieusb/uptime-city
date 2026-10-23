@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
 import { MeshLambertMaterial, type Group, type Sprite } from 'three'
 import { buildingGlow, type BuildingState } from '../domain/status'
 import {
@@ -34,6 +34,10 @@ const SERVICE_LABEL_OFFSET = BUILDING_WIDTH / 2 + 0.15
 // A floor is tall enough on screen for its label from this zoom.
 const SERVICE_LABEL_ZOOM = 10
 
+// Set by a neighbourhood whose labels are not shown, while another one is in
+// focus.
+export const LabelsHidden = createContext(false)
+
 // The host name, always on top and at the same size on screen whatever the
 // zoom. A sprite rather than a drei `Html` label: with React 19, the first
 // `Html` label rendered empty.
@@ -61,12 +65,13 @@ export function Label({
   size?: number
   order?: number
 }) {
+  const hidden = useContext(LabelsHidden)
   const sprite = useRef<Sprite>(null)
   const label = useMemo(() => labelTexture(text, badge), [text, badge])
   useEffect(() => () => label.texture.dispose(), [label])
   useFrame(({ camera }) => {
     if (!sprite.current) return
-    sprite.current.visible = camera.zoom >= minZoom
+    sprite.current.visible = !hidden && camera.zoom >= minZoom
     sprite.current.scale.set(
       (size * label.width) / camera.zoom,
       (size * label.height) / camera.zoom,

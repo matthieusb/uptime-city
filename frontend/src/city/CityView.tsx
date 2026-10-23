@@ -232,6 +232,7 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
               key={n.id}
               plate={n}
               focus={focusedId === n.id ? focus : null}
+              behind={focusedId !== null && focusedId !== n.id}
               pickable={focusedId === null || focusedId === n.id}
               onSelect={() => setFocusedId(n.id)}
             >

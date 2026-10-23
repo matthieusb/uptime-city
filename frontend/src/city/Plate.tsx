@@ -1,6 +1,7 @@
 import { Line } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { LabelsHidden } from './Buildings'
 import { Mesh, type Group } from 'three'
 import { BUILDING_WIDTH } from './layout'
 import { approach, type Focus } from './focus'
@@ -17,6 +18,8 @@ interface Props {
   plate: Neighbourhood
   // Set when this neighbourhood is the one in focus.
   focus: Focus | null
+  // Whether another neighbourhood is in focus: then its labels are hidden.
+  behind: boolean
   // Whether the pointer can pick it: not while another one is in focus.
   pickable: boolean
   onSelect: () => void
@@ -28,6 +31,7 @@ interface Props {
 export default function Plate({
   plate,
   focus,
+  behind,
   pickable,
   onSelect,
   children,
@@ -80,7 +84,7 @@ export default function Plate({
 
   return (
     <group ref={group} position={[plate.x, 0, plate.z]}>
-      {children}
+      <LabelsHidden.Provider value={behind}>{children}</LabelsHidden.Provider>
       <mesh position={[0, HIT_HEIGHT, 0]} raycast={picks} {...handlers}>
         <boxGeometry args={[2 * halfWidth, 0.1, 2 * halfDepth]} />
         {hit}
