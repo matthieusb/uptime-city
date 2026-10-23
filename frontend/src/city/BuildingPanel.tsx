@@ -1,9 +1,10 @@
 import type { FloorInfo } from '../domain/floors'
-import { statusColor } from '../domain/status'
+import CheckBars from '../ui/CheckBars'
 import type { Badge } from './textures'
 
 // A 2D view of the building in focus, over the 3D view: its name and badge,
-// then the services on its floors with their status, from the top floor down.
+// then the services on its floors from the top floor down, each with its
+// status and its last checks as bars.
 export default function BuildingPanel({
   name,
   badge,
@@ -15,14 +16,11 @@ export default function BuildingPanel({
 }) {
   const row = (floor: FloorInfo) => (
     <li key={floor.id}>
-      <span
-        className="building-panel-dot"
-        style={{ background: statusColor(floor.status) }}
-        role="img"
-        aria-label={floor.status}
-      />
-      <span className="building-panel-name">{floor.name}</span>
-      <span className="building-panel-status">{floor.status}</span>
+      <div className="building-panel-service">
+        <span className="building-panel-name">{floor.name}</span>
+        <span className="building-panel-status">{floor.status}</span>
+      </div>
+      <CheckBars results={floor.results} />
     </li>
   )
   return (

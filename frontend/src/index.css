@@ -401,8 +401,8 @@ body {
 
 .building-panel li {
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.35rem;
   padding: 0.3rem 0.5rem;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -414,11 +414,27 @@ body {
   color: var(--muted);
 }
 
-.building-panel-dot {
-  flex: none;
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 50%;
+.building-panel-service {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.building-panel .bars {
+  height: 16px;
+}
+
+/* The panel scrolls, so a tooltip would be cut at its sides: it opens inward
+   from the bar, to the right in the left half of the bars and to the left in
+   the other half. */
+.building-panel .bar-tooltip {
+  left: 0;
+  transform: none;
+}
+
+.building-panel .bar:nth-child(n + 16) .bar-tooltip {
+  left: auto;
+  right: 0;
 }
 
 .building-panel-name {

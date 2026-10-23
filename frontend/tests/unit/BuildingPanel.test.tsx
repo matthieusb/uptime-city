@@ -1,6 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import BuildingPanel from '../../src/city/BuildingPanel'
+import { MAX_BARS } from '../../src/domain/checks'
 
 afterEach(cleanup)
 
@@ -23,15 +24,56 @@ it('lists every floor from the top down, with its status', () => {
       name="media-vm"
       badge={badge}
       floors={[
-        { id: 'a', name: 'audiobookshelf', status: 'up' },
-        { id: 'b', name: 'freshrss', status: 'down' },
-        { id: 'c', name: 'karakeep', status: 'unknown' },
+        { id: 'a', name: 'audiobookshelf', status: 'up', results: [] },
+        { id: 'b', name: 'freshrss', status: 'down', results: [] },
+        { id: 'c', name: 'karakeep', status: 'unknown', results: [] },
       ]}
     />,
   )
 
   const rows = screen.getAllByRole('listitem').map((li) => li.textContent)
   expect(rows).toEqual(['audiobookshelfup', 'freshrssdown', 'karakeepunknown'])
+})
+
+const check = (ts: string, success: boolean) => ({
+  ts,
+  success,
+  latency_ms: success ? 12 : null,
+  error: success ? null : 'timeout',
+  host_down: false,
+})
+
+it('shows the last checks of each service as bars, not a dot', () => {
+  render(
+    <BuildingPanel
+      name="media-vm"
+      badge={badge}
+      floors={[
+        {
+          id: 'a',
+          name: 'audiobookshelf',
+          status: 'down',
+          results: [
+            check('2026-01-01T00:00:00Z', true),
+            check('2026-01-01T00:01:00Z', false),
+          ],
+        },
+        { id: 'b', name: 'freshrss', status: 'unknown', results: [] },
+      ]}
+    />,
+  )
+
+  const [first, second] = screen.getAllByRole('listitem')
+  const greens = within(first).getAllByTestId('check-bar')
+  expect(greens.map((bar) => bar.style.backgroundColor)).toEqual([
+    'rgb(46, 204, 113)',
+    'rgb(231, 76, 60)',
+  ])
+  expect(within(first).getAllByTestId('empty-bar')).toHaveLength(MAX_BARS - 2)
+  expect(within(first).getByText('timeout')).toBeTruthy()
+  expect(within(second).queryAllByTestId('check-bar')).toEqual([])
+  expect(within(second).getAllByTestId('empty-bar')).toHaveLength(MAX_BARS)
+  expect(screen.queryAllByRole('img')).toEqual([])
 })
 
 it('says so when the building has no services', () => {

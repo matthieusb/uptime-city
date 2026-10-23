@@ -48,6 +48,14 @@ describe('buildingFloors', () => {
     ])
   })
 
+  it('gives the checks of each floor, none until it is probed', () => {
+    const history = new Map([['nas-web', [result(false), result(true)]]])
+    expect(buildingFloors(group, history).map((f) => f.results)).toEqual([
+      [],
+      [result(false), result(true)],
+    ])
+  })
+
   it('has no floor for a host without services', () => {
     expect(
       buildingFloors({ host: group.host, services: [] }, new Map()),

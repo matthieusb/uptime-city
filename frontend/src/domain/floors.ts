@@ -6,6 +6,7 @@ export interface FloorInfo {
   id: string
   name: string
   status: Status
+  results: CheckResult[]
 }
 
 // The floors of a building, as the 2D panel lists them: its services, from the
@@ -19,5 +20,6 @@ export function buildingFloors(
     id: service.id,
     name: service.name,
     status: latestStatus(history.get(service.id)),
+    results: history.get(service.id) ?? [],
   }))
 }
