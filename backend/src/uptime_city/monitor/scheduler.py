@@ -8,8 +8,6 @@ from uptime_city.probes.http import probe_http
 from uptime_city.probes.tcp import connect
 
 HISTORY_SIZE = 50
-# For TCP and ICMP checks: `client.timeout` only applies to HTTP so far.
-PROBE_TIMEOUT_S = 5.0
 
 
 class Monitor:
@@ -71,9 +69,10 @@ class Monitor:
             )
         if endpoint.is_http:
             return await probe_http(endpoint)
+        timeout = endpoint.client.timeout.total_seconds()
         if endpoint.scheme == "tcp" and endpoint.port is not None:
-            return await connect(endpoint.hostname, endpoint.port, PROBE_TIMEOUT_S)
-        return await self._probe(endpoint.hostname, PROBE_TIMEOUT_S)
+            return await connect(endpoint.hostname, endpoint.port, timeout)
+        return await self._probe(endpoint.hostname, timeout)
 
     async def _loop(self, endpoint: Endpoint) -> None:
         while True:

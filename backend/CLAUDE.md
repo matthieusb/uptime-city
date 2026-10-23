@@ -50,7 +50,7 @@ hosts:
 ```
 
 ### v1
-- Check fields (hosts and services): `name`, `url`, `method`, `body`, `headers`, `interval` (default 60s), `enabled`, `client.timeout` (default 10s) and `client.insecure`.
+- Check fields (hosts and services): `name`, `url`, `method`, `body`, `headers`, `interval` (default 60s), `enabled`, `client.timeout` (default 30s, for every probe type) and `client.insecure`.
 - Schemes: `http(s)://`, `tcp://`, `icmp://`, and DNS. A DNS check has a `dns: {query-name, query-type}` block and uses the resolver as `url`.
 - Conditions have the form `"<placeholder> <op> <value>"`.
   - Operators: `== != < <= > >=`.
@@ -146,6 +146,7 @@ What exists today, one sentence per feature (see `.claude/rules/document-complet
 - **Vm-hosts**: the API tells each endpoint's `kind` (physical, vm or service) and a vm-host's `parent_id`; a down physical host does not affect its vm-hosts yet. See `config/models.py`, `tests/test_config.py` and `tests/test_main.py`.
 - **Host down**: a down host's services are recorded as down with `host_down`, without being probed. See `monitor/scheduler.py` and `tests/test_monitor.py`.
 - **HTTP probe**: a check succeeds when every condition passes, and redirects are not followed, so a service that redirects needs a condition like `[STATUS] < 400`. See `probes/http.py` and `tests/test_http_probe.py`.
+- **Timeout**: each check gives up after its `client.timeout` (default 30s), HTTP, TCP and ICMP alike. See `config/models.py`, `monitor/scheduler.py`, `tests/test_monitor.py` and `tests/test_tcp_probe.py`.
 - **TCP probe**: a check succeeds when the connection opens in time. See `probes/tcp.py` and `tests/test_tcp_probe.py`.
 - **ICMP probe**: the default probe for any other scheme. See `probes/icmp.py` and `tests/test_monitor.py`.
 - **Conditions**: numeric comparisons on `[STATUS]` and `[RESPONSE_TIME]`, for HTTP only. See `conditions/evaluate.py` and `tests/test_http_probe.py`.
