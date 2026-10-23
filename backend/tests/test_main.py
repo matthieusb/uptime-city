@@ -111,3 +111,18 @@ def test_host_summaries_count_the_services_up_and_down_of_each_physical_host() -
         response = client.get("/api/v1/hosts/summary")
     # Its own service and the one of its vm-host, both up.
     assert response.json() == [{"id": "macro-server-1", "services_up": 2, "services_down": 0}]
+
+
+def test_building_summaries_count_the_services_right_on_each_host() -> None:
+    with make_client() as client:
+        while not all(
+            client.get(f"/api/v1/endpoints/{id}/history").json()
+            for id in ("macro-server-1-ssh", "monitoring-vm-web")
+        ):
+            pass
+        response = client.get("/api/v1/buildings/summary")
+    # The physical host and its vm-host each have one service, both up.
+    assert response.json() == [
+        {"id": "macro-server-1", "services_up": 1, "services_down": 0},
+        {"id": "monitoring-vm", "services_up": 1, "services_down": 0},
+    ]

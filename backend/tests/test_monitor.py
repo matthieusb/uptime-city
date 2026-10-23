@@ -160,3 +160,28 @@ async def test_service_counts_count_the_services_of_a_down_host_as_down() -> Non
 
     # The services of the vm-host are probed on their own and are up.
     assert monitor.service_counts("srv") == (3, 2)
+
+
+async def test_building_counts_only_cover_the_services_right_on_the_host() -> None:
+    async def probe(hostname: str, timeout: float) -> ProbeResult:
+        return ProbeResult(
+            ts=datetime.now(UTC), success="bad" not in hostname, error=None, latency_ms=1.0
+        )
+
+    monitor = Monitor(make_config_with_vm(), probe)
+    task = asyncio.create_task(monitor.run())
+    while not all(monitor.history(id) for id in monitor.endpoints):
+        await asyncio.sleep(0.01)
+    task.cancel()
+
+    assert monitor.building_counts("srv") == (1, 1)
+    assert monitor.building_counts("vm") == (1, 2)
+
+
+async def test_building_counts_leave_out_services_not_probed_yet() -> None:
+    async def probe(hostname: str, timeout: float) -> ProbeResult:
+        return ProbeResult(ts=datetime.now(UTC), success=True, latency_ms=1.0)
+
+    monitor = Monitor(make_config_with_vm(), probe)
+
+    assert monitor.building_counts("vm") == (0, 0)

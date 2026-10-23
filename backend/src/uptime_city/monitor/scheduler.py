@@ -27,22 +27,32 @@ class Monitor:
         """Last `limit` results, oldest first."""
         return list(self._results[endpoint_id])[-limit:]
 
-    def service_counts(self, physical_id: str) -> tuple[int, int]:
-        """How many services of a physical host are up and down, as of their last result.
-
-        It covers the services right on the host and those on its vm-hosts. A service
-        not probed yet counts for neither.
-        """
-        hosts = {physical_id} | {
-            e.id for e in self.endpoints.values() if e.kind == "vm" and e.parent_id == physical_id
-        }
+    def _counts(self, host_ids: set[str]) -> tuple[int, int]:
         latest = [
             self._results[e.id][-1]
             for e in self.endpoints.values()
-            if e.kind == "service" and e.host_id in hosts and self._results[e.id]
+            if e.kind == "service" and e.host_id in host_ids and self._results[e.id]
         ]
         up = sum(1 for result in latest if result.success)
         return up, len(latest) - up
+
+    def building_counts(self, host_id: str) -> tuple[int, int]:
+        """How many services right on a host (physical or vm) are up and down, as of their last result.
+
+        A service not probed yet counts for neither.
+        """
+        return self._counts({host_id})
+
+    def service_counts(self, physical_id: str) -> tuple[int, int]:
+        """The same for a physical host, with the services of its vm-hosts too."""
+        return self._counts(
+            {physical_id}
+            | {
+                e.id
+                for e in self.endpoints.values()
+                if e.kind == "vm" and e.parent_id == physical_id
+            }
+        )
 
     async def run(self) -> None:
         async with asyncio.TaskGroup() as group:

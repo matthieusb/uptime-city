@@ -23,11 +23,11 @@ class EndpointInfo(BaseModel):
 
 class HostSummary(BaseModel):
     id: str
-    """The id of a physical host."""
+    """The id of a host."""
     services_up: int
-    """Services running correctly, on the host and on its vm-hosts."""
+    """Services running correctly."""
     services_down: int
-    """Services that are down, on the host and on its vm-hosts."""
+    """Services that are down."""
 
 
 def _monitor(request: Request) -> Monitor:
@@ -52,12 +52,26 @@ async def list_endpoints(request: Request) -> list[EndpointInfo]:
 
 @router.get("/hosts/summary")
 async def host_summaries(request: Request) -> list[HostSummary]:
+    """For each physical host, its services and those of its vm-hosts."""
     monitor = _monitor(request)
     summaries: list[HostSummary] = []
     for endpoint in monitor.endpoints.values():
         if endpoint.kind != "physical":
             continue
         up, down = monitor.service_counts(endpoint.id)
+        summaries.append(HostSummary(id=endpoint.id, services_up=up, services_down=down))
+    return summaries
+
+
+@router.get("/buildings/summary")
+async def building_summaries(request: Request) -> list[HostSummary]:
+    """For each host, physical or vm, its own services only: what its building shows."""
+    monitor = _monitor(request)
+    summaries: list[HostSummary] = []
+    for endpoint in monitor.endpoints.values():
+        if endpoint.kind == "service":
+            continue
+        up, down = monitor.building_counts(endpoint.id)
         summaries.append(HostSummary(id=endpoint.id, services_up=up, services_down=down))
     return summaries
 
