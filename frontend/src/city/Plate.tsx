@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LabelsHidden } from './Buildings'
 import { Mesh, type Group } from 'three'
-import { BUILDING_WIDTH } from './layout'
+import { BUILDING_WIDTH, type Lot } from './layout'
 import { approach, type Focus, type Pose } from './focus'
 import type { Neighbourhood } from './world'
 
@@ -25,6 +25,11 @@ interface Props {
   // A joining tile, which only follows the others: it is never picked.
   inert?: boolean
   onSelect: () => void
+  // In focus: the building in focus, if any, the pick of one, and the way back
+  // to the whole neighbourhood.
+  focusedLot?: string | null
+  onSelectBuilding?: (lotId: string) => void
+  onBack?: () => void
   children: ReactNode
 }
 
@@ -37,6 +42,9 @@ export default function Plate({
   pickable: canPick,
   inert = false,
   onSelect,
+  focusedLot = null,
+  onSelectBuilding,
+  onBack,
   children,
 }: Props) {
   const group = useRef<Group>(null)
@@ -51,7 +59,10 @@ export default function Plate({
   if (focus) lift.current = focus.lift
   const pickable = canPick && !inert
   const [hovered, setHovered] = useState(false)
+  // The building under the pointer, to pick in focus view.
+  const [hoveredLot, setHoveredLot] = useState<string | null>(null)
   const shown = hovered && pickable && !focus
+  const pointing = shown || (!!focus && hoveredLot !== null)
   const { halfWidth, halfDepth, lots } = plate.layout
 
   useFrame((_, delta) => {
@@ -70,36 +81,44 @@ export default function Plate({
   })
 
   useEffect(() => {
-    document.body.style.cursor = shown ? 'pointer' : ''
+    document.body.style.cursor = pointing ? 'pointer' : ''
     return () => {
       document.body.style.cursor = ''
     }
-  }, [shown])
+  }, [pointing])
 
   // Only what the pointer can see of the neighbourhood picks it: its ground
   // and its buildings, not the sky above it.
   // Always a function: React Three Fiber would leave `undefined` on the mesh
   // when it is made pickable again, and nothing could pick it.
   const picks = pickable ? Mesh.prototype.raycast : NO_RAYCAST
-  const handlers = {
+  // `lot` is the building that the pointer is over, if it is a monitored one.
+  const handlers = (lot?: Lot) => ({
     onPointerOver: (e: { stopPropagation: () => void }) => {
       e.stopPropagation()
       setHovered(true)
+      setHoveredLot(lot && lot.id !== focusedLot ? lot.id : null)
     },
-    onPointerOut: () => setHovered(false),
+    onPointerOut: () => {
+      setHovered(false)
+      setHoveredLot(null)
+    },
     onClick: (e: { stopPropagation: () => void; delta: number }) => {
       // A drag of the map is not a click.
       if (e.delta > 4) return
       e.stopPropagation()
-      onSelect()
+      if (!focus) onSelect()
+      else if (lot) {
+        if (lot.id !== focusedLot) onSelectBuilding?.(lot.id)
+      } else if (focusedLot) onBack?.()
     },
-  }
+  })
   const hit = <meshBasicMaterial colorWrite={false} depthWrite={false} />
 
   return (
     <group ref={group} position={[plate.x, 0, plate.z]}>
       <LabelsHidden.Provider value={behind}>{children}</LabelsHidden.Provider>
-      <mesh position={[0, HIT_HEIGHT, 0]} raycast={picks} {...handlers}>
+      <mesh position={[0, HIT_HEIGHT, 0]} raycast={picks} {...handlers()}>
         <boxGeometry args={[2 * halfWidth, 0.1, 2 * halfDepth]} />
         {hit}
       </mesh>
@@ -108,7 +127,7 @@ export default function Plate({
           key={lot.id}
           position={[lot.x, lot.height / 2, lot.z]}
           raycast={picks}
-          {...handlers}
+          {...handlers(lot.decor ? undefined : lot)}
         >
           <boxGeometry args={[BUILDING_WIDTH, lot.height, BUILDING_WIDTH]} />
           {hit}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   approach,
+  buildingFrame,
   depth,
   fitZoom,
   FAR,
@@ -9,6 +10,7 @@ import {
   plateFrame,
   VIEW,
 } from '../../src/city/focus'
+import { BUILDING_WIDTH } from '../../src/city/layout'
 import {
   worldFrame,
   worldLayout,
@@ -131,6 +133,46 @@ describe('plateFrame centering', () => {
       expect(centre.sy).toBeCloseTo(middle(points.map((p) => p.sy)), 6)
     },
   )
+})
+
+describe('buildingFrame', () => {
+  const plate = world.neighbourhoods[0]
+  const lot = plate.layout.lots.find((l) => !l.decor)!
+  const target = plateFrame(plate, TOP).target
+
+  it('frames a building, smaller than its neighbourhood', () => {
+    const frame = buildingFrame(plate, lot, target)
+    const tile = plateFrame(plate, TOP)
+    expect(frame.width).toBeGreaterThan(0)
+    expect(frame.width).toBeLessThan(tile.width)
+    expect(frame.height).toBeLessThan(tile.height)
+  })
+
+  it('looks at the middle of what the building shows, once the neighbourhood is scaled', () => {
+    const { target: at } = buildingFrame(plate, lot, target)
+    const grown = (v: number, c: number) => c + NEAR * (v - c)
+    const x = grown(plate.x + lot.x, target[0])
+    const z = grown(plate.z + lot.z, target[2])
+    const half = (NEAR * BUILDING_WIDTH) / 2
+    const screen = (px: number, y: number, pz: number) => ({
+      sx: (px - pz) / Math.SQRT2,
+      sy:
+        y * Math.cos(Math.PI / 6) -
+        ((px + pz) / Math.SQRT2) * Math.sin(Math.PI / 6),
+    })
+    const points = [-1, 1].flatMap((dx) =>
+      [-1, 1].flatMap((dz) =>
+        [0, NEAR * lot.height].map((y) =>
+          screen(x + dx * half, y, z + dz * half),
+        ),
+      ),
+    )
+    const middle = (values: number[]) =>
+      (Math.min(...values) + Math.max(...values)) / 2
+    const centre = screen(...at)
+    expect(centre.sx).toBeCloseTo(middle(points.map((p) => p.sx)), 6)
+    expect(centre.sy).toBeCloseTo(middle(points.map((p) => p.sy)), 6)
+  })
 })
 
 describe('fitZoom', () => {

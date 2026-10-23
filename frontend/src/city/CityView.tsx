@@ -4,11 +4,19 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { EndpointInfo } from '../api/client'
 import { historyQuery, hostSummariesQuery } from '../api/queries'
+import { buildingFloors } from '../domain/floors'
 import { allHosts, groupByHost } from '../domain/hosts'
 import { buildingState, latestStatus, nukedState } from '../domain/status'
 import { serviceLabelSides } from './layout'
 import Buildings, { Label, type BuildingProps } from './Buildings'
-import { FAR, fitZoom, focusFor, NEAR, plateFrame } from './focus'
+import {
+  buildingFrame,
+  FAR,
+  fitZoom,
+  focusFor,
+  NEAR,
+  plateFrame,
+} from './focus'
 import {
   Backdrop,
   CameraRig,
@@ -18,6 +26,7 @@ import {
 } from './FocusRig'
 import Nuke from './effects/Nuke'
 import { NUKE_HEIGHT } from './effects/nukeShape'
+import BuildingPanel from './BuildingPanel'
 import HostTitle from './HostTitle'
 import LabelLegend from './LabelLegend'
 import {
@@ -152,6 +161,13 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
   const [focusedId, setFocusedId] = useState<string | null>(null)
   // The legend only applies to the whole map: in focus, every label shows.
   const labels = focusedId ? ALL_LABELS : chosen
+  // The building in focus within it, if any.
+  const [building, setBuilding] = useState<{
+    plate: string
+    lot: string
+  } | null>(null)
+  const buildingId =
+    building && building.plate === focusedId ? building.lot : null
   const focusFrame = useMemo(() => {
     const plate = world.neighbourhoods.find((n) => n.id === focusedId)
     if (!plate) return null
@@ -171,22 +187,33 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
         : null,
     [world, focusedId, focusFrame, top],
   )
+  const buildingFocus = useMemo(() => {
+    const plate = world.neighbourhoods.find((n) => n.id === focusedId)
+    const lot = plate?.layout.lots.find((l) => l.id === buildingId)
+    return plate && lot && focusFrame
+      ? buildingFrame(plate, lot, focusFrame.target)
+      : null
+  }, [world, focusedId, buildingId, focusFrame])
   // A neighbourhood that is gone cannot stay in focus.
   useEffect(() => {
     if (focusedId && !focus) setFocusedId(null)
   }, [focusedId, focus])
-  // The focus ends with a click anywhere but on the focused neighbourhood:
-  // on the dimmed map, or outside of the 3D view.
-  const unfocus = () => setFocusedId(null)
+  // A click anywhere but on the focused neighbourhood, on the dimmed map or
+  // outside of the 3D view, goes up one level: from a building to its
+  // neighbourhood, then to the whole map.
+  const back = () => (buildingId ? setBuilding(null) : setFocusedId(null))
   const view = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!focusedId) return
     const onPointerDown = (e: PointerEvent) => {
-      if (!view.current?.contains(e.target as Node)) setFocusedId(null)
+      if (!view.current?.contains(e.target as Node)) {
+        if (buildingId) setBuilding(null)
+        else setFocusedId(null)
+      }
     }
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
-  }, [focusedId])
+  }, [focusedId, buildingId])
   const lift = focus ? Math.hypot(...focus.lift) : 0
   const shadowBox = Math.hypot(world.halfWidth, world.halfDepth) + 4 + lift
   const lightDistance = shadowBox * 1.5 + 50
@@ -198,7 +225,7 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
         dpr={PIXEL_RATIO}
         gl={{ antialias: false }}
         shadows="basic"
-        onPointerMissed={unfocus}
+        onPointerMissed={back}
         camera={{
           position: cameraPosition(frame),
           near: 0.1,
@@ -206,8 +233,11 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
         }}
       >
         <FitCamera frame={frame} />
-        <CameraRig offset={offset(frame)} focusFrame={focusFrame} />
-        <Backdrop focus={focus} frame={frame} onClose={unfocus} />
+        <CameraRig
+          offset={offset(frame)}
+          focusFrame={buildingFocus ?? focusFrame}
+        />
+        <Backdrop focus={focus} frame={frame} onClose={back} />
         <MapControls
           makeDefault
           enableRotate={false}
@@ -245,7 +275,7 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
                 : null
             }
             pickable={false}
-            onSelect={unfocus}
+            onSelect={back}
           >
             <Scenery layout={n.layout} />
           </Plate>
@@ -303,6 +333,9 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
               }
               pickable={focusedId === null || focusedId === n.id}
               onSelect={() => setFocusedId(n.id)}
+              focusedLot={focusedId === n.id ? buildingId : null}
+              onSelectBuilding={(lot) => setBuilding({ plate: n.id, lot })}
+              onBack={() => setBuilding(null)}
             >
               <Scenery layout={layout} nuked={isNuked} />
               <Buildings buildings={buildings} />
@@ -322,6 +355,17 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
           )
         })}
       </Canvas>
+      {buildingId && hosts.get(buildingId) && (
+        <BuildingPanel
+          name={hosts.get(buildingId)!.host.name}
+          badge={
+            hosts.get(buildingId)!.host.kind === 'vm'
+              ? VM_BADGE
+              : SERVICES_BADGE
+          }
+          {...buildingFloors(hosts.get(buildingId)!, history)}
+        />
+      )}
       {!focusedId && <LabelLegend shown={chosen} onToggle={toggleLabel} />}
       {focusedId && (
         <HostTitle

@@ -357,3 +357,78 @@ body {
   color: var(--bg);
   border-radius: 999px;
 }
+
+/* The 2D view of the building in focus, over the top right of the 3D view. */
+.building-panel {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  box-sizing: border-box;
+  width: 18rem;
+  max-width: calc(100% - 1.5rem);
+  max-height: calc(100% - 1.5rem);
+  padding: 0.6rem 0.75rem;
+  overflow-y: auto;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: rgba(15, 17, 21, 0.88);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.building-panel header {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.building-panel-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.building-panel ol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.building-panel li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.3rem 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.building-panel-ground {
+  margin-top: 0.25rem;
+  border-style: dashed;
+}
+
+.building-panel-dot {
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+}
+
+.building-panel-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.building-panel-status {
+  color: var(--muted);
+  font-size: 0.75rem;
+}

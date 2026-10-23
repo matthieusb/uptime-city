@@ -1,6 +1,7 @@
 // Pure logic of the focus view, independent of three.js: a clicked
 // neighbourhood is lifted towards the camera, in front of a dimming backdrop
 // that hides the others.
+import { BUILDING_WIDTH, type Lot } from './layout'
 import { worldFrame, type Frame, type Neighbourhood, type World } from './world'
 
 // Unit vector from the ground towards the camera. It is the camera direction
@@ -103,6 +104,43 @@ export function plateFrame(n: Neighbourhood, top: number): Frame {
     top,
   )
   return { ...frame, width: frame.width * NEAR, height: frame.height * NEAR }
+}
+
+// Room around a building in focus, for the panel and the labels by its floors.
+const BUILDING_ROOM = { width: 2.4, height: 1.25 }
+
+// What the camera frames to show one building of the focused neighbourhood,
+// which is grown around `center`, as in focus view.
+export function buildingFrame(
+  plate: Neighbourhood,
+  lot: Lot,
+  center: [number, number, number],
+): Frame {
+  const grown = (v: number, c: number) => c + NEAR * (v - c)
+  const half = (NEAR * BUILDING_WIDTH) / 2
+  const x = grown(plate.x + lot.x, center[0])
+  const z = grown(plate.z + lot.z, center[2])
+  const frame = worldFrame(
+    {
+      neighbourhoods: [
+        {
+          id: lot.id,
+          x,
+          z,
+          layout: { ...plate.layout, halfWidth: half, halfDepth: half },
+        },
+      ],
+      wilds: [],
+      halfWidth: Math.abs(x) + half,
+      halfDepth: Math.abs(z) + half,
+    },
+    NEAR * lot.height,
+  )
+  return {
+    ...frame,
+    width: frame.width * BUILDING_ROOM.width,
+    height: frame.height * BUILDING_ROOM.height,
+  }
 }
 
 // One step towards a goal, smooth whatever the frame rate.
