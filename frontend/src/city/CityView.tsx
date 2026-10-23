@@ -1,9 +1,9 @@
 import { MapControls } from '@react-three/drei'
 import { Canvas, useThree } from '@react-three/fiber'
-import { useQueries } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { EndpointInfo } from '../api/client'
-import { historyQuery } from '../api/queries'
+import { historyQuery, hostSummariesQuery } from '../api/queries'
 import { allHosts, groupByHost } from '../domain/hosts'
 import { buildingState, latestStatus, nukedState } from '../domain/status'
 import { serviceLabelSides } from './layout'
@@ -22,6 +22,7 @@ import LabelLegend from './LabelLegend'
 import {
   ALL_LABELS,
   badgeOf,
+  hostBadges,
   shortBadgeOf,
   DEFAULT_LABELS,
   type LabelKind,
@@ -103,6 +104,12 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
         })),
       ),
     [groups],
+  )
+  // The services up and down of each physical host, from the backend.
+  const { data: summaries } = useQuery(hostSummariesQuery)
+  const summaryOf = useMemo(
+    () => new Map((summaries ?? []).map((s) => [s.id, s])),
+    [summaries],
   )
   const hosts = useMemo(
     () => new Map(allHosts(groups).map((g) => [g.host.id, g])),
@@ -304,7 +311,7 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
               {focusedId !== n.id && labels.has('host') && (
                 <Label
                   text={names.get(n.id) ?? n.id}
-                  badge={NEIGHBOURHOOD_BADGE}
+                  badge={hostBadges(summaryOf.get(n.id))}
                   y={2}
                   x={-n.layout.halfWidth + 2}
                   size={1.3}

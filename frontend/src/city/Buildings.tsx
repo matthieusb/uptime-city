@@ -60,7 +60,7 @@ export function Label({
   z?: number
   // 0 puts the label's left edge at the position, 0.5 centers it.
   anchor?: number
-  badge?: Badge
+  badge?: Badge | Badge[]
   // Hidden while the camera is zoomed out further than this.
   minZoom?: number
   // Multiplies the on-screen size.
@@ -69,7 +69,12 @@ export function Label({
 }) {
   const hidden = useContext(LabelsHidden)
   const sprite = useRef<Sprite>(null)
-  const label = useMemo(() => labelTexture(text, badge), [text, badge])
+  // Badges are often rebuilt on render: compare them by what they show.
+  const badgeKey = [badge ?? []]
+    .flat()
+    .map((b) => `${b.text}|${b.color}|${b.textColor}`)
+    .join()
+  const label = useMemo(() => labelTexture(text, badge), [text, badgeKey])
   useEffect(() => () => label.texture.dispose(), [label])
   useFrame(({ camera }) => {
     if (!sprite.current) return

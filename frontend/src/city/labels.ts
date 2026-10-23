@@ -1,3 +1,5 @@
+import type { HostSummary } from '../api/client'
+import { statusColor } from '../domain/status'
 import type { Badge } from './textures'
 
 // The kinds of label on the map that the legend turns on and off.
@@ -48,3 +50,21 @@ export const ALL_LABELS: ReadonlySet<LabelKind> = new Set(
 
 // Every kind of label shows at first.
 export const DEFAULT_LABELS = ALL_LABELS
+
+// The badges of a physical host: its own, then the number of services that
+// run correctly (green) and of those that are down (red), on the host and on
+// its vm-hosts. A count of zero has no badge.
+export function hostBadges(summary: HostSummary | undefined): Badge[] {
+  const badges = [shortBadgeOf('host')]
+  if (summary && summary.services_up > 0) {
+    badges.push({ text: String(summary.services_up), color: statusColor('up') })
+  }
+  if (summary && summary.services_down > 0) {
+    badges.push({
+      text: String(summary.services_down),
+      color: statusColor('down'),
+      textColor: '#ffffff',
+    })
+  }
+  return badges
+}
