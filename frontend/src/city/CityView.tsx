@@ -318,6 +318,8 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
                   : group.host.kind === 'vm'
                     ? SHORT_VM_BADGE
                     : SHORT_SERVICES_BADGE,
+                // Only the building in focus keeps its labels.
+                muted: buildingId !== null && lot.id !== buildingId,
                 showLabel: labels.has(
                   group.host.kind === 'vm' ? 'vm' : 'services',
                 ),
