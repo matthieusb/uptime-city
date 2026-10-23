@@ -3,28 +3,25 @@ import { statusColor } from '../domain/status'
 import type { Badge } from './textures'
 
 // A 2D view of the building in focus, over the 3D view: its name and badge,
-// then every floor with its label and status, from the top floor down to the
-// ground floor, the host itself.
+// then the services on its floors with their status, from the top floor down.
 export default function BuildingPanel({
   name,
   badge,
   floors,
-  ground,
 }: {
   name: string
   badge: Badge
   floors: FloorInfo[]
-  ground: FloorInfo
 }) {
-  const row = (floor: FloorInfo, label: string, className?: string) => (
-    <li key={floor.id} className={className}>
+  const row = (floor: FloorInfo) => (
+    <li key={floor.id}>
       <span
         className="building-panel-dot"
         style={{ background: statusColor(floor.status) }}
         role="img"
         aria-label={floor.status}
       />
-      <span className="building-panel-name">{label}</span>
+      <span className="building-panel-name">{floor.name}</span>
       <span className="building-panel-status">{floor.status}</span>
     </li>
   )
@@ -43,10 +40,10 @@ export default function BuildingPanel({
           {badge.text}
         </span>
       </header>
-      <ol>
-        {floors.map((floor) => row(floor, floor.name))}
-        {row(ground, `${ground.name} (host)`, 'building-panel-ground')}
-      </ol>
+      <ol>{floors.map(row)}</ol>
+      {floors.length === 0 && (
+        <p className="building-panel-empty">No services.</p>
+      )}
     </aside>
   )
 }

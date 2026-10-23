@@ -24,10 +24,9 @@ describe('buildingFloors', () => {
     services: [endpoint('nas-api', 'api'), endpoint('nas-web', 'web')],
   }
 
-  it('lists the services from the top floor down, then the host on the ground floor', () => {
-    const { floors, ground } = buildingFloors(group, new Map())
+  it('lists the services from the top floor down, without the host itself', () => {
+    const floors = buildingFloors(group, new Map())
     expect(floors.map((f) => f.name)).toEqual(['api', 'web'])
-    expect(ground.name).toBe('nas')
   })
 
   it('tells the status of each floor from its last result', () => {
@@ -36,17 +35,22 @@ describe('buildingFloors', () => {
       ['nas-api', [result(true), result(false)]],
       ['nas-web', [result(false), result(true)]],
     ])
-    const { floors, ground } = buildingFloors(group, history)
-    expect(floors.map((f) => f.status)).toEqual(['down', 'up'])
-    expect(ground.status).toBe('up')
+    expect(buildingFloors(group, history).map((f) => f.status)).toEqual([
+      'down',
+      'up',
+    ])
   })
 
   it('has an unknown status until a floor is probed', () => {
-    const { floors, ground } = buildingFloors(group, new Map())
-    expect([...floors, ground].map((f) => f.status)).toEqual([
-      'unknown',
+    expect(buildingFloors(group, new Map()).map((f) => f.status)).toEqual([
       'unknown',
       'unknown',
     ])
+  })
+
+  it('has no floor for a host without services', () => {
+    expect(
+      buildingFloors({ host: group.host, services: [] }, new Map()),
+    ).toEqual([])
   })
 })

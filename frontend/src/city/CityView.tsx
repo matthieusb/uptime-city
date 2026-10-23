@@ -363,7 +363,7 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
               ? VM_BADGE
               : SERVICES_BADGE
           }
-          {...buildingFloors(hosts.get(buildingId)!, history)}
+          floors={buildingFloors(hosts.get(buildingId)!, history)}
         />
       )}
       {!focusedId && <LabelLegend shown={chosen} onToggle={toggleLabel} />}

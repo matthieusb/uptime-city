@@ -409,9 +409,9 @@ body {
   border-radius: 4px;
 }
 
-.building-panel-ground {
-  margin-top: 0.25rem;
-  border-style: dashed;
+.building-panel-empty {
+  margin: 0;
+  color: var(--muted);
 }
 
 .building-panel-dot {

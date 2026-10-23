@@ -7,14 +7,7 @@ afterEach(cleanup)
 const badge = { text: 'VM', color: '#4fa6e0' }
 
 it('shows the building name and badge', () => {
-  render(
-    <BuildingPanel
-      name="media-vm"
-      badge={badge}
-      floors={[]}
-      ground={{ id: 'media-vm', name: 'media-vm', status: 'up' }}
-    />,
-  )
+  render(<BuildingPanel name="media-vm" badge={badge} floors={[]} />)
 
   const header = within(screen.getByTestId('building-panel')).getByText(
     'media-vm',
@@ -24,7 +17,7 @@ it('shows the building name and badge', () => {
   expect(screen.getByText('VM')).toBeTruthy()
 })
 
-it('lists every floor from the top down, with its status, the host last', () => {
+it('lists every floor from the top down, with its status', () => {
   render(
     <BuildingPanel
       name="media-vm"
@@ -34,15 +27,16 @@ it('lists every floor from the top down, with its status, the host last', () => 
         { id: 'b', name: 'freshrss', status: 'down' },
         { id: 'c', name: 'karakeep', status: 'unknown' },
       ]}
-      ground={{ id: 'media-vm', name: 'media-vm', status: 'up' }}
     />,
   )
 
   const rows = screen.getAllByRole('listitem').map((li) => li.textContent)
-  expect(rows).toEqual([
-    'audiobookshelfup',
-    'freshrssdown',
-    'karakeepunknown',
-    'media-vm (host)up',
-  ])
+  expect(rows).toEqual(['audiobookshelfup', 'freshrssdown', 'karakeepunknown'])
+})
+
+it('says so when the building has no services', () => {
+  render(<BuildingPanel name="empty-vm" badge={badge} floors={[]} />)
+
+  expect(screen.getByText('No services.')).toBeTruthy()
+  expect(screen.queryAllByRole('listitem')).toEqual([])
 })
