@@ -11,9 +11,8 @@ The decisions in this file and in the per-part files are the project foundation.
 The frontend and backend are separate, in one monorepo. Each part has its own `CLAUDE.md` with its specific decisions:
 
 ```
-backend/        # Python, FastAPI, uv       -> backend/CLAUDE.md (YAML config format, probes, storage)
+backend/        # Python, FastAPI, uv       -> backend/CLAUDE.md (YAML config format, probes, storage; example/config.example.yaml)
 frontend/       # Vite + React + TypeScript -> frontend/CLAUDE.md (three.js / R3F, state, tests)
-config.yaml     # example monitoring config (format described in backend/CLAUDE.md)
 ```
 
 - The backend probes the services, stores the results and exposes them.

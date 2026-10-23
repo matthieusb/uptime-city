@@ -1,1 +1,4 @@
 .idea/
+
+# Local monitoring config, copied from backend/example/config.example.yaml
+backend/example/config.yaml

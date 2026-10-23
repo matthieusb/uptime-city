@@ -66,6 +66,9 @@ importers:
       oxlint:
         specifier: ^1.88.0
         version: 1.89.0
+      prettier:
+        specifier: ^3.9.10
+        version: 3.9.10
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
@@ -977,6 +980,11 @@ packages:
 
   potpack@1.0.2:
     resolution: {integrity: sha512-choctRBIV9EMT9WGAZHn3V7t0Z2pMQyl0EZE6pFc/6ml3ssw7Dlf/oAOvFwjm1HVsqfQN8GfeFyJ+d8tRzqueQ==}
+
+  prettier@3.9.10:
+    resolution: {integrity: sha512-skGHTH1Yb9QvaTC4hWnRTzEYtCpApF0UMBPz+t/0ZPzP8ihefo/btKd+QA7pUE0fEwA1SbS/NmhyEcstdXOIdA==}
+    engines: {node: '>=14'}
+    hasBin: true
 
   pretty-format@27.5.1:
     resolution: {integrity: sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ==}
@@ -2030,6 +2038,8 @@ snapshots:
       source-map-js: 1.2.2
 
   potpack@1.0.2: {}
+
+  prettier@3.9.10: {}
 
   pretty-format@27.5.1:
     dependencies:
