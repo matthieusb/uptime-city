@@ -8,7 +8,7 @@ import { allHosts, groupByHost } from '../domain/hosts'
 import { buildingState, latestStatus, nukedState } from '../domain/status'
 import { serviceLabelSides } from './layout'
 import Buildings, { Label, type BuildingProps } from './Buildings'
-import { fitZoom, focusFor, plateFrame } from './focus'
+import { FAR, fitZoom, focusFor, NEAR, plateFrame } from './focus'
 import {
   Backdrop,
   CameraRig,
@@ -126,10 +126,6 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
   const frame = useMemo(() => worldFrame(world, top), [world, top])
   // The neighbourhood in focus, lifted in front of the others.
   const [focusedId, setFocusedId] = useState<string | null>(null)
-  const focus = useMemo(
-    () => (focusedId ? focusFor(world, focusedId, top) : null),
-    [world, focusedId, top],
-  )
   const focusFrame = useMemo(() => {
     const plate = world.neighbourhoods.find((n) => n.id === focusedId)
     if (!plate) return null
@@ -142,6 +138,13 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
     return plateFrame(plate, tallest)
     // `nukedKey` stands for `nuked`.
   }, [world, focusedId, nukedKey])
+  const focus = useMemo(
+    () =>
+      focusedId && focusFrame
+        ? focusFor(world, focusedId, top, focusFrame.target)
+        : null,
+    [world, focusedId, focusFrame, top],
+  )
   // A neighbourhood that is gone cannot stay in focus.
   useEffect(() => {
     if (focusedId && !focus) setFocusedId(null)
@@ -240,7 +243,14 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
               key={n.id}
               plate={n}
               focus={focusedId === n.id ? focus : null}
-              behind={focusedId !== null && focusedId !== n.id}
+              pose={
+                focusFrame && focusedId
+                  ? {
+                      center: focusFrame.target,
+                      scale: focusedId === n.id ? NEAR : FAR,
+                    }
+                  : null
+              }
               pickable={focusedId === null || focusedId === n.id}
               onSelect={() => setFocusedId(n.id)}
             >

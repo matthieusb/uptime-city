@@ -22,6 +22,19 @@ export function depth(x: number, y: number, z: number): number {
 // Room kept between the backdrop and what it hides or what stands in front.
 const MARGIN = 2
 
+// In focus view the neighbourhood grows and the rest of the map shrinks, both
+// around the middle of the screen, as if it was further away. The camera is
+// orthographic, so size is the only sign of distance.
+export const NEAR = 1.1
+export const FAR = 0.6
+
+// Where and how big a neighbourhood stands in focus view: scaled around
+// `center`, a point of the ground at the middle of the screen.
+export interface Pose {
+  center: [number, number, number]
+  scale: number
+}
+
 export interface Focus {
   // How far the focused neighbourhood moves, along VIEW.
   lift: [number, number, number]
@@ -29,11 +42,26 @@ export interface Focus {
   backdropDepth: number
 }
 
-function corners(n: Neighbourhood, top: number): number[] {
+// The depth of a corner of a neighbourhood once it is scaled around `center`.
+function corners(
+  n: Neighbourhood,
+  top: number,
+  center: [number, number, number],
+  scale: number,
+): number[] {
+  const middle = depth(...center)
   return [-1, 1].flatMap((dx) =>
     [-1, 1].flatMap((dz) =>
-      [0, top].map((y) =>
-        depth(n.x + dx * n.layout.halfWidth, y, n.z + dz * n.layout.halfDepth),
+      [0, top].map(
+        (y) =>
+          middle +
+          scale *
+            (depth(
+              n.x + dx * n.layout.halfWidth,
+              y,
+              n.z + dz * n.layout.halfDepth,
+            ) -
+              middle),
       ),
     ),
   )
@@ -41,14 +69,20 @@ function corners(n: Neighbourhood, top: number): number[] {
 
 // Where the neighbourhood goes so that it is wholly in front of every other
 // one, up to the top of their tallest building, with the backdrop in between.
-export function focusFor(world: World, id: string, top: number): Focus | null {
+// `center` is the point of the ground that the camera looks at.
+export function focusFor(
+  world: World,
+  id: string,
+  top: number,
+  center: [number, number, number],
+): Focus | null {
   const focused = world.neighbourhoods.find((n) => n.id === id)
   if (!focused) return null
   const others = world.neighbourhoods
     .filter((n) => n !== focused)
-    .flatMap((n) => corners(n, top))
+    .flatMap((n) => corners(n, top, center, FAR))
   const behind = Math.max(-Infinity, ...others)
-  const front = Math.min(...corners(focused, 0))
+  const front = Math.min(...corners(focused, 0, center, NEAR))
   const distance = Math.max(0, behind - front) + MARGIN
   return {
     lift: [VIEW[0] * distance, VIEW[1] * distance, VIEW[2] * distance],
@@ -57,9 +91,9 @@ export function focusFor(world: World, id: string, top: number): Focus | null {
 }
 
 // What the camera frames to show one neighbourhood, up to its tallest
-// building.
+// building, as big as it gets in focus view.
 export function plateFrame(n: Neighbourhood, top: number): Frame {
-  return worldFrame(
+  const frame = worldFrame(
     {
       neighbourhoods: [n],
       wilds: [],
@@ -68,6 +102,7 @@ export function plateFrame(n: Neighbourhood, top: number): Frame {
     },
     top,
   )
+  return { ...frame, width: frame.width * NEAR, height: frame.height * NEAR }
 }
 
 // One step towards a goal, smooth whatever the frame rate.

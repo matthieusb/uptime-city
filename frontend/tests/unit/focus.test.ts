@@ -3,7 +3,9 @@ import {
   approach,
   depth,
   fitZoom,
+  FAR,
   focusFor,
+  NEAR,
   plateFrame,
   VIEW,
 } from '../../src/city/focus'
@@ -23,6 +25,7 @@ const spec = (id: string, ...vms: number[]): NeighbourhoodSpec => ({
 
 const world = worldLayout([spec('a', 3), spec('b'), spec('c', 5), spec('d')])
 const TOP = 20
+const CENTER: [number, number, number] = [3, 0, -5]
 
 describe('VIEW', () => {
   it('is a unit vector that looks down at 30° along the diagonal', () => {
@@ -36,11 +39,11 @@ describe('VIEW', () => {
 
 describe('focusFor', () => {
   it('knows no neighbourhood that is not on the map', () => {
-    expect(focusFor(world, 'nope', TOP)).toBeNull()
+    expect(focusFor(world, 'nope', TOP, CENTER)).toBeNull()
   })
 
   it('lifts a neighbourhood along the view, so that it does not move on screen', () => {
-    const { lift } = focusFor(world, 'a', TOP)!
+    const { lift } = focusFor(world, 'a', TOP, CENTER)!
     const length = Math.hypot(...lift)
     expect(length).toBeGreaterThan(0)
     for (let i = 0; i < 3; i++) expect(lift[i] / length).toBeCloseTo(VIEW[i])
@@ -49,31 +52,40 @@ describe('focusFor', () => {
   it.each(['a', 'b', 'c', 'd'])(
     'puts %s in front of the backdrop and every other one behind it',
     (id) => {
-      const { lift, backdropDepth } = focusFor(world, id, TOP)!
+      const { lift, backdropDepth } = focusFor(world, id, TOP, CENTER)!
       const plate = world.neighbourhoods.find((n) => n.id === id)!
-      const corner = (n: typeof plate, y: number, sx: number, sz: number) =>
-        depth(n.x + sx * n.layout.halfWidth, y, n.z + sz * n.layout.halfDepth)
-      const signs = [-1, 1]
-      const lifted = Math.min(
-        ...signs.flatMap((sx) =>
-          signs.map((sz) => corner(plate, 0, sx, sz) + Math.hypot(...lift)),
-        ),
-      )
-      expect(lifted).toBeGreaterThan(backdropDepth)
-      for (const other of world.neighbourhoods.filter((n) => n !== plate)) {
-        const highest = Math.max(
-          ...signs.flatMap((sx) =>
-            signs.map((sz) => corner(other, TOP, sx, sz)),
+      // Depth of a point once scaled around the middle of the screen.
+      const scaled = (scale: number, x: number, y: number, z: number) =>
+        depth(...CENTER) + scale * (depth(x, y, z) - depth(...CENTER))
+      const corners = (n: typeof plate, y: number, scale: number) =>
+        [-1, 1].flatMap((sx) =>
+          [-1, 1].map((sz) =>
+            scaled(
+              scale,
+              n.x + sx * n.layout.halfWidth,
+              y,
+              n.z + sz * n.layout.halfDepth,
+            ),
           ),
         )
-        expect(highest).toBeLessThan(backdropDepth)
+      const lifted = Math.min(...corners(plate, 0, NEAR)) + Math.hypot(...lift)
+      expect(lifted).toBeGreaterThan(backdropDepth)
+      for (const other of world.neighbourhoods.filter((n) => n !== plate)) {
+        expect(Math.max(...corners(other, TOP, FAR))).toBeLessThan(
+          backdropDepth,
+        )
       }
     },
   )
 
+  it('makes the focused neighbourhood bigger and the others smaller', () => {
+    expect(NEAR).toBeGreaterThan(1)
+    expect(FAR).toBeLessThan(1)
+  })
+
   it('works for a map of one neighbourhood', () => {
     const alone = worldLayout([spec('a')])
-    expect(focusFor(alone, 'a', TOP)).not.toBeNull()
+    expect(focusFor(alone, 'a', TOP, CENTER)).not.toBeNull()
   })
 })
 

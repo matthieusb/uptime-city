@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LabelsHidden } from './Buildings'
 import { Mesh, type Group } from 'three'
 import { BUILDING_WIDTH } from './layout'
-import { approach, type Focus } from './focus'
+import { approach, type Focus, type Pose } from './focus'
 import type { Neighbourhood } from './world'
 
 // Height of the flat part that catches the pointer, above the hills.
@@ -18,8 +18,8 @@ interface Props {
   plate: Neighbourhood
   // Set when this neighbourhood is the one in focus.
   focus: Focus | null
-  // Whether another neighbourhood is in focus: then its labels are hidden.
-  behind: boolean
+  // Where and how big it stands while a neighbourhood is in focus, if so.
+  pose: Pose | null
   // Whether the pointer can pick it: not while another one is in focus.
   pickable: boolean
   onSelect: () => void
@@ -31,13 +31,18 @@ interface Props {
 export default function Plate({
   plate,
   focus,
-  behind,
+  pose,
   pickable,
   onSelect,
   children,
 }: Props) {
   const group = useRef<Group>(null)
   const lifted = useRef(0)
+  // The last pose stays too, to come back after the focus is gone.
+  const posed = useRef<Pose>({ center: [0, 0, 0], scale: 1 })
+  if (pose) posed.current = pose
+  // Another neighbourhood is in focus: its labels are hidden.
+  const behind = pose !== null && !focus
   // The last lift stays, to come back down after the focus is gone.
   const lift = useRef<Focus['lift']>([0, 0, 0])
   if (focus) lift.current = focus.lift
@@ -46,13 +51,18 @@ export default function Plate({
   const { halfWidth, halfDepth, lots } = plate.layout
 
   useFrame((_, delta) => {
-    lifted.current = approach(lifted.current, focus ? 1 : 0, delta)
+    const t = (lifted.current = approach(lifted.current, pose ? 1 : 0, delta))
+    const { center, scale } = posed.current
+    // Grows or shrinks around the middle of the screen.
+    const k = 1 + (scale - 1) * t
     const [lx, ly, lz] = lift.current
+    const own = focus ? t : 0
     group.current?.position.set(
-      plate.x + lx * lifted.current,
-      ly * lifted.current,
-      plate.z + lz * lifted.current,
+      center[0] + k * (plate.x - center[0]) + lx * own,
+      center[1] + k * (0 - center[1]) + ly * own,
+      center[2] + k * (plate.z - center[2]) + lz * own,
     )
+    group.current?.scale.setScalar(k)
   })
 
   useEffect(() => {
