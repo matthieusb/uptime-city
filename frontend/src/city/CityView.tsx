@@ -28,6 +28,7 @@ import {
   MIN_ZOOM,
   type Controls,
 } from './FocusRig'
+import Clouds from './effects/Clouds'
 import Nuke from './effects/Nuke'
 import { NUKE_HEIGHT } from './effects/nukeShape'
 import BuildingPanel from './BuildingPanel'
@@ -273,6 +274,13 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
           shadow-camera-top={shadowBox}
           shadow-camera-bottom={-shadowBox}
           shadow-camera-far={4 * lightDistance}
+        />
+        {/* In focus, they would drift in front of what is shown. */}
+        <Clouds
+          halfWidth={world.halfWidth}
+          halfDepth={world.halfDepth}
+          height={top + 2}
+          visible={!focusedId}
         />
         {world.wilds.map((n) => (
           <Plate
