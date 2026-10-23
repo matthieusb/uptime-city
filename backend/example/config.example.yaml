@@ -5,36 +5,41 @@
 # vm-hosts. A vm-host has its own check and contains services only, never other hosts.
 # - A host check can be any supported check: icmp://<host>, tcp://<host>:<port> or http(s)://.
 # - A service gives its full URL. It never inherits interval or timeout from its host.
+# - A check gives up after client.timeout (default 30s), whatever its type: here each service sets it explicitly.
 # - Every http(s) check must state its expected status with a [STATUS] condition, or the backend refuses to start.
 # - While a host is down, its services are not probed: they are shown as down because of the host.
 hosts:
   - name: web-server
     url: "icmp://web-server.example.org"
-    interval: 10s
+    interval: 60s
     services:
       - name: website
         url: "https://www.example.org"
-        interval: 10s
+        interval: 60s
+        client: {timeout: 30s}
         conditions: ["[STATUS] == 200"]
       - name: ssh
         url: "tcp://web-server.example.org:22"
-        interval: 10s
+        interval: 60s
+        client: {timeout: 30s}
     vm-hosts:
       - name: web-server-monitoring-vm
         url: "icmp://web-server-monitoring-vm.example.org"
-        interval: 10s
+        interval: 60s
         services:
           - name: dashboard
             url: "https://dashboard.example.org"
-            interval: 10s
+            interval: 60s
+            client: {timeout: 30s}
             conditions: ["[STATUS] == 200"]
   - name: database-server
     url: "icmp://database-server.example.org"
-    interval: 10s
+    interval: 60s
     services:
       - name: postgresql
         url: "tcp://database-server.example.org:5432"
-        interval: 10s
+        interval: 60s
+        client: {timeout: 30s}
   - name: backup-server
     url: "icmp://backup-server.example.org"
-    interval: 30s
+    interval: 60s

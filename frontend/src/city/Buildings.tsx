@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
 import { MeshLambertMaterial, type Group, type Sprite } from 'three'
-import { buildingGlow, type BuildingState } from '../domain/status'
+import { badgeBreath, buildingGlow, type BuildingState } from '../domain/status'
 import {
   collapseProgress,
   floorPose,
@@ -20,8 +20,12 @@ export interface BuildingProps {
   services: string[]
   // Which side of the building, on screen, the floor labels go to.
   labelSide?: 'left' | 'right'
-  // Tells what the building is, next to its name.
-  badge?: Badge
+  // Tells what the building is, next to its name, and how its services do.
+  badge?: Badge | Badge[]
+  // Whether the name and badge of the building show.
+  showLabel?: boolean
+  // Another building is in focus: none of its labels show.
+  muted?: boolean
   state: BuildingState
   // Already in ruins, without falling before our eyes.
   ruined?: boolean
@@ -33,6 +37,10 @@ const SERVICE_LABEL_OFFSET = BUILDING_WIDTH / 2 + 0.15
 
 // A floor is tall enough on screen for its label from this zoom.
 const SERVICE_LABEL_ZOOM = 10
+
+// Set by a neighbourhood whose labels are not shown, while another one is in
+// focus.
+export const LabelsHidden = createContext(false)
 
 // The host name, always on top and at the same size on screen whatever the
 // zoom. A sprite rather than a drei `Html` label: with React 19, the first
@@ -54,34 +62,67 @@ export function Label({
   z?: number
   // 0 puts the label's left edge at the position, 0.5 centers it.
   anchor?: number
-  badge?: Badge
+  badge?: Badge | Badge[]
   // Hidden while the camera is zoomed out further than this.
   minZoom?: number
   // Multiplies the on-screen size.
   size?: number
   order?: number
 }) {
+  const hidden = useContext(LabelsHidden)
   const sprite = useRef<Sprite>(null)
-  const label = useMemo(() => labelTexture(text, badge), [text, badge])
-  useEffect(() => () => label.texture.dispose(), [label])
-  useFrame(({ camera }) => {
-    if (!sprite.current) return
-    sprite.current.visible = camera.zoom >= minZoom
-    sprite.current.scale.set(
-      (size * label.width) / camera.zoom,
-      (size * label.height) / camera.zoom,
-      1,
-    )
+  const pulse = useRef<Sprite>(null)
+  // Badges are often rebuilt on render: compare them by what they show.
+  const badgeKey = [badge ?? []]
+    .flat()
+    .map((b) => `${b.text}|${b.color}|${b.textColor}`)
+    .join()
+  const label = useMemo(() => labelTexture(text, badge), [text, badgeKey])
+  useEffect(
+    () => () => {
+      label.texture.dispose()
+      label.pulse?.dispose()
+    },
+    [label],
+  )
+  useFrame(({ camera, clock }) => {
+    const shown = !hidden && camera.zoom >= minZoom
+    // The counting badges are a layer of their own, which breathes.
+    for (const [layer, opacity] of [
+      [sprite.current, 1],
+      [pulse.current, badgeBreath(clock.elapsedTime)],
+    ] as const) {
+      if (!layer) continue
+      layer.visible = shown
+      layer.material.opacity = opacity
+      layer.scale.set(
+        (size * label.width) / camera.zoom,
+        (size * label.height) / camera.zoom,
+        1,
+      )
+    }
   })
   return (
-    <sprite
-      ref={sprite}
-      position={[x, y, z]}
-      center={[anchor, 0.5]}
-      renderOrder={order}
-    >
-      <spriteMaterial map={label.texture} depthTest={false} transparent />
-    </sprite>
+    <>
+      <sprite
+        ref={sprite}
+        position={[x, y, z]}
+        center={[anchor, 0.5]}
+        renderOrder={order}
+      >
+        <spriteMaterial map={label.texture} depthTest={false} transparent />
+      </sprite>
+      {label.pulse && (
+        <sprite
+          ref={pulse}
+          position={[x, y, z]}
+          center={[anchor, 0.5]}
+          renderOrder={order}
+        >
+          <spriteMaterial map={label.pulse} depthTest={false} transparent />
+        </sprite>
+      )}
+    </>
   )
 }
 
@@ -93,6 +134,8 @@ function Building({
   services,
   labelSide = 'right',
   badge,
+  showLabel = true,
+  muted = false,
   state,
   ruined = false,
 }: BuildingProps) {
@@ -182,10 +225,11 @@ function Building({
           burning && <Fire key={i} id={`${lot.id}:${i}`} y={floorBase(i)} />,
       )}
       {state.collapsed && <Fire id={lot.id} y={RUBBLE_HEIGHT / 2} smoke />}
-      <Label text={name} y={labelY} badge={badge} size={name ? 1 : 1.4} />
+      {showLabel && !muted && <Label text={name} y={labelY} badge={badge} />}
       {/* Beside each floor, on the side of the building with room, on screen. Only a
           standing building has floors to point at. */}
       {!state.collapsed &&
+        !muted &&
         services.map((service, i) => (
           <Label
             key={i}

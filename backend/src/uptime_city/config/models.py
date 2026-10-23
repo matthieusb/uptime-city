@@ -38,7 +38,7 @@ Kind = Literal["physical", "vm", "service"]
 
 
 class ClientConfig(BaseModel):
-    timeout: Duration = timedelta(seconds=10)
+    timeout: Duration = timedelta(seconds=30)
     insecure: bool = False
 
 

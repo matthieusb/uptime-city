@@ -35,6 +35,8 @@ This contract is shared by both parts.
 GET /api/v1/endpoints                → endpoint definitions
 GET /api/v1/status                   → snapshot {seq, endpoints:[{id, status, last_check_at, latency_ms, uptime_24h}]}
 GET /api/v1/endpoints/{id}/history   → past results (since, limit)
+GET /api/v1/hosts/summary            → per physical host {id, services_up, services_down}, vm-hosts' services included
+GET /api/v1/buildings/summary        → per host, physical or vm, {id, services_up, services_down} for its own services only
 GET /api/v1/events  (text/event-stream)
 ```
 

@@ -37,6 +37,10 @@ export function groupByHost(endpoints: EndpointInfo[]): HostGroup[] {
       groups.get(endpoint.host_id ?? '') ?? vms.get(endpoint.host_id ?? '')
     host?.services.push(endpoint)
   }
+  // Services are listed in ascending alphabetical order, in every view.
+  for (const host of [...groups.values(), ...vms.values()]) {
+    host.services.sort((a, b) => a.name.localeCompare(b.name))
+  }
   return [...groups.values()]
 }
 

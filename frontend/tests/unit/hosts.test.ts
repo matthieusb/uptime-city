@@ -26,7 +26,17 @@ describe('groupByHost', () => {
     expect(groupByHost([])).toEqual([])
   })
 
-  it('groups services under their host, keeping the order', () => {
+  it('sorts the services of a host and of a vm-host by name', () => {
+    const web = endpoint('web', null)
+    const vm = endpoint('vm', null, 'web')
+    const [z, a, m] = ['z', 'a', 'm'].map((n) => endpoint(n, 'web'))
+    const [y, b] = ['y', 'b'].map((n) => endpoint(n, 'vm'))
+    const [group] = groupByHost([web, vm, z, y, a, b, m])
+    expect(group.services).toEqual([a, m, z])
+    expect(group.vms[0].services).toEqual([b, y])
+  })
+
+  it('groups services under their host', () => {
     const web = endpoint('web', null)
     const db = endpoint('db', null)
     const http = endpoint('web-http', 'web')
@@ -63,7 +73,7 @@ describe('groupByHost with vm-hosts', () => {
       {
         host: nas,
         services: [nasPg],
-        vms: [{ host: vm, services: [vmWeb, vmApi] }],
+        vms: [{ host: vm, services: [vmApi, vmWeb] }],
       },
     ])
   })

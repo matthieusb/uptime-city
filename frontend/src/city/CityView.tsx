@@ -1,17 +1,50 @@
 import { MapControls } from '@react-three/drei'
 import { Canvas, useThree } from '@react-three/fiber'
-import { useQueries } from '@tanstack/react-query'
-import { useLayoutEffect, useMemo } from 'react'
+import { useQueries, useQuery } from '@tanstack/react-query'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { EndpointInfo } from '../api/client'
-import { historyQuery } from '../api/queries'
+import {
+  buildingSummariesQuery,
+  historyQuery,
+  hostSummariesQuery,
+} from '../api/queries'
+import { buildingFloors } from '../domain/floors'
 import { allHosts, groupByHost } from '../domain/hosts'
 import { buildingState, latestStatus, nukedState } from '../domain/status'
 import { serviceLabelSides } from './layout'
 import Buildings, { Label, type BuildingProps } from './Buildings'
+import {
+  buildingFrame,
+  FAR,
+  fitZoom,
+  focusFor,
+  NEAR,
+  plateFrame,
+} from './focus'
+import {
+  Backdrop,
+  CameraRig,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  type Controls,
+} from './FocusRig'
+import Clouds from './effects/Clouds'
 import Nuke from './effects/Nuke'
 import { NUKE_HEIGHT } from './effects/nukeShape'
+import BuildingPanel from './BuildingPanel'
+import HostTitle from './HostTitle'
+import LabelLegend from './LabelLegend'
+import {
+  ALL_LABELS,
+  badgeOf,
+  buildingBadges,
+  hostBadges,
+  shortBadgeOf,
+  DEFAULT_LABELS,
+  type LabelKind,
+} from './labels'
+import Plate from './Plate'
 import Scenery from './Scenery'
-import type { Badge } from './textures'
 import { nukedLayout, worldFrame, worldLayout, type Frame } from './world'
 
 // Render at the screen's native resolution (up to 2x on hi-dpi screens). The
@@ -29,12 +62,6 @@ function cameraPosition(frame: Frame): [number, number, number] {
   ]
 }
 
-// What the map controls expose.
-interface Controls {
-  target: { set: (x: number, y: number, z: number) => void }
-  update: () => void
-}
-
 // Zooms so that the whole map, up to its tallest building, fits in the
 // canvas. The map can then be dragged and zoomed.
 function FitCamera({ frame }: { frame: Frame }) {
@@ -44,10 +71,7 @@ function FitCamera({ frame }: { frame: Frame }) {
     const { camera, controls } = get()
     const [x, y, z] = cameraPosition(frame)
     camera.position.set(x, y, z)
-    camera.zoom = Math.min(
-      width / (frame.width * 1.05),
-      height / (frame.height * 1.1),
-    )
+    camera.zoom = fitZoom(frame, width, height)
     camera.updateProjectionMatrix()
     const orbit = controls as unknown as Controls | null
     orbit?.target.set(...frame.target)
@@ -56,12 +80,19 @@ function FitCamera({ frame }: { frame: Frame }) {
   return null
 }
 
+// From the point looked at to the camera.
+function offset(frame: Frame): [number, number, number] {
+  const [x, y, z] = cameraPosition(frame)
+  return [x - frame.target[0], y - frame.target[1], z - frame.target[2]]
+}
+
 // Smaller maps are framed as if they had a building this tall.
 const MIN_TOP = 6
 
-const VM_BADGE: Badge = { text: 'VM', color: '#4fa6e0' }
-const SERVICES_BADGE: Badge = { text: 'services', color: '#f5a623' }
-const NEIGHBOURHOOD_BADGE: Badge = { text: 'host', color: '#c9d1d9' }
+const VM_BADGE = badgeOf('vm')
+const SERVICES_BADGE = badgeOf('services')
+const SHORT_VM_BADGE = shortBadgeOf('vm')
+const SHORT_SERVICES_BADGE = shortBadgeOf('services')
 
 export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
   // One neighbourhood per physical host, one building per vm-host and one for
@@ -88,6 +119,18 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
         })),
       ),
     [groups],
+  )
+  // The services up and down of each physical host, from the backend.
+  const { data: summaries } = useQuery(hostSummariesQuery)
+  const summaryOf = useMemo(
+    () => new Map((summaries ?? []).map((s) => [s.id, s])),
+    [summaries],
+  )
+  // The same for the services right on each building, from the backend.
+  const { data: buildingSummaries } = useQuery(buildingSummariesQuery)
+  const buildingSummaryOf = useMemo(
+    () => new Map((buildingSummaries ?? []).map((s) => [s.id, s])),
+    [buildingSummaries],
   )
   const hosts = useMemo(
     () => new Map(allHosts(groups).map((g) => [g.host.id, g])),
@@ -118,16 +161,83 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
     ...world.neighbourhoods.flatMap((n) => n.layout.lots.map((l) => l.height)),
   )
   const frame = useMemo(() => worldFrame(world, top), [world, top])
-  const shadowBox = Math.hypot(world.halfWidth, world.halfDepth) + 4
+  // The kinds of label to show.
+  const [chosen, setChosen] = useState<ReadonlySet<LabelKind>>(DEFAULT_LABELS)
+  const toggleLabel = (kind: LabelKind) =>
+    setChosen((now) => {
+      const next = new Set(now)
+      if (!next.delete(kind)) next.add(kind)
+      return next
+    })
+  // The neighbourhood in focus, lifted in front of the others.
+  const [focusedId, setFocusedId] = useState<string | null>(null)
+  // The legend only applies to the whole map: in focus, every label shows.
+  const labels = focusedId ? ALL_LABELS : chosen
+  // The building in focus within it, if any.
+  const [building, setBuilding] = useState<{
+    plate: string
+    lot: string
+  } | null>(null)
+  const buildingId =
+    building && building.plate === focusedId ? building.lot : null
+  const focusFrame = useMemo(() => {
+    const plate = world.neighbourhoods.find((n) => n.id === focusedId)
+    if (!plate) return null
+    // Framed up to its own tallest building, to center what it shows.
+    const tallest = Math.max(
+      MIN_TOP,
+      nuked.has(plate.id) ? NUKE_HEIGHT : 0,
+      ...plate.layout.lots.map((l) => l.height),
+    )
+    return plateFrame(plate, tallest)
+    // `nukedKey` stands for `nuked`.
+  }, [world, focusedId, nukedKey])
+  const focus = useMemo(
+    () =>
+      focusedId && focusFrame
+        ? focusFor(world, focusedId, top, focusFrame.target)
+        : null,
+    [world, focusedId, focusFrame, top],
+  )
+  const buildingFocus = useMemo(() => {
+    const plate = world.neighbourhoods.find((n) => n.id === focusedId)
+    const lot = plate?.layout.lots.find((l) => l.id === buildingId)
+    return plate && lot && focusFrame
+      ? buildingFrame(plate, lot, focusFrame.target)
+      : null
+  }, [world, focusedId, buildingId, focusFrame])
+  // A neighbourhood that is gone cannot stay in focus.
+  useEffect(() => {
+    if (focusedId && !focus) setFocusedId(null)
+  }, [focusedId, focus])
+  // A click anywhere but on the focused neighbourhood, on the dimmed map or
+  // outside of the 3D view, goes up one level: from a building to its
+  // neighbourhood, then to the whole map.
+  const back = () => (buildingId ? setBuilding(null) : setFocusedId(null))
+  const view = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!focusedId) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (!view.current?.contains(e.target as Node)) {
+        if (buildingId) setBuilding(null)
+        else setFocusedId(null)
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [focusedId, buildingId])
+  const lift = focus ? Math.hypot(...focus.lift) : 0
+  const shadowBox = Math.hypot(world.halfWidth, world.halfDepth) + 4 + lift
   const lightDistance = shadowBox * 1.5 + 50
 
   return (
-    <div className="city" data-testid="city-view">
+    <div ref={view} className="city" data-testid="city-view">
       <Canvas
         orthographic
         dpr={PIXEL_RATIO}
         gl={{ antialias: false }}
         shadows="basic"
+        onPointerMissed={back}
         camera={{
           position: cameraPosition(frame),
           near: 0.1,
@@ -135,12 +245,17 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
         }}
       >
         <FitCamera frame={frame} />
+        <CameraRig
+          offset={offset(frame)}
+          focusFrame={buildingFocus ?? focusFrame}
+        />
+        <Backdrop focus={focus} frame={frame} onClose={back} />
         <MapControls
           makeDefault
           enableRotate={false}
           screenSpacePanning
-          minZoom={1}
-          maxZoom={60}
+          minZoom={MIN_ZOOM}
+          maxZoom={MAX_ZOOM}
           target={frame.target}
         />
         <hemisphereLight args={['#dff3ff', '#5a4a3a', 1.2]} />
@@ -160,10 +275,29 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
           shadow-camera-bottom={-shadowBox}
           shadow-camera-far={4 * lightDistance}
         />
+        {/* In focus, they would drift in front of what is shown. */}
+        <Clouds
+          halfWidth={world.halfWidth}
+          halfDepth={world.halfDepth}
+          height={top + 2}
+          visible={!focusedId}
+        />
         {world.wilds.map((n) => (
-          <group key={n.id} position={[n.x, 0, n.z]}>
+          <Plate
+            key={n.id}
+            plate={n}
+            focus={null}
+            inert
+            pose={
+              focusFrame && focusedId
+                ? { center: focusFrame.target, scale: FAR }
+                : null
+            }
+            pickable={false}
+            onSelect={back}
+          >
             <Scenery layout={n.layout} />
-          </group>
+          </Plate>
         ))}
         {world.neighbourhoods.map((n) => {
           const layout = layouts.get(n.id) ?? n.layout
@@ -173,38 +307,94 @@ export default function CityView({ endpoints }: { endpoints: EndpointInfo[] }) {
             .filter((lot) => !lot.decor)
             .map((lot) => {
               const group = hosts.get(lot.id)!
+              // The floors are stacked from the ground up, so the first
+              // service in alphabetical order goes on the top floor.
+              const floors = [...group.services].reverse()
               return {
                 lot,
-                name: group.host.kind === 'vm' ? group.host.name : '',
-                services: group.services.map((s) => s.name),
+                // On the whole map, a badge alone: there is little room.
+                name:
+                  group.host.kind === 'vm' && focusedId ? group.host.name : '',
+                services: floors.map((s) => s.name),
                 labelSide: sides.get(lot.id),
-                badge: group.host.kind === 'vm' ? VM_BADGE : SERVICES_BADGE,
+                // In focus, the services of the building up and down.
+                badge: focusedId
+                  ? buildingBadges(
+                      group.host.kind === 'vm' ? VM_BADGE : SERVICES_BADGE,
+                      buildingSummaryOf.get(lot.id),
+                    )
+                  : group.host.kind === 'vm'
+                    ? SHORT_VM_BADGE
+                    : SHORT_SERVICES_BADGE,
+                // Only the building in focus keeps its labels.
+                muted: buildingId !== null && lot.id !== buildingId,
+                showLabel: labels.has(
+                  group.host.kind === 'vm' ? 'vm' : 'services',
+                ),
                 ruined: isNuked,
                 state: isNuked
                   ? nukedState(1 + group.services.length)
                   : buildingState(
                       history.get(group.host.id),
-                      group.services.map((s) => history.get(s.id)),
+                      floors.map((s) => history.get(s.id)),
                     ),
               }
             })
           return (
-            <group key={n.id} position={[n.x, 0, n.z]}>
+            <Plate
+              key={n.id}
+              plate={n}
+              focus={focusedId === n.id ? focus : null}
+              pose={
+                focusFrame && focusedId
+                  ? {
+                      center: focusFrame.target,
+                      scale: focusedId === n.id ? NEAR : FAR,
+                    }
+                  : null
+              }
+              pickable={focusedId === null || focusedId === n.id}
+              onSelect={() => setFocusedId(n.id)}
+              focusedLot={focusedId === n.id ? buildingId : null}
+              onSelectBuilding={(lot) => setBuilding({ plate: n.id, lot })}
+              onBack={() => setBuilding(null)}
+            >
               <Scenery layout={layout} nuked={isNuked} />
               <Buildings buildings={buildings} />
               {isNuked && <Nuke />}
-              <Label
-                text={names.get(n.id) ?? n.id}
-                badge={NEIGHBOURHOOD_BADGE}
-                y={2}
-                x={-n.layout.halfWidth + 2}
-                size={1.3}
-                order={10}
-              />
-            </group>
+              {/* In focus, its name is shown at the top left of the view. */}
+              {focusedId !== n.id && labels.has('host') && (
+                <Label
+                  text={names.get(n.id) ?? n.id}
+                  badge={hostBadges(summaryOf.get(n.id))}
+                  y={2}
+                  x={-n.layout.halfWidth + 2}
+                  size={1.3}
+                  order={10}
+                />
+              )}
+            </Plate>
           )
         })}
       </Canvas>
+      {buildingId && hosts.get(buildingId) && (
+        <BuildingPanel
+          name={hosts.get(buildingId)!.host.name}
+          badge={
+            hosts.get(buildingId)!.host.kind === 'vm'
+              ? VM_BADGE
+              : SERVICES_BADGE
+          }
+          floors={buildingFloors(hosts.get(buildingId)!, history)}
+        />
+      )}
+      {!focusedId && <LabelLegend shown={chosen} onToggle={toggleLabel} />}
+      {focusedId && (
+        <HostTitle
+          name={names.get(focusedId) ?? focusedId}
+          badges={hostBadges(summaryOf.get(focusedId))}
+        />
+      )}
     </div>
   )
 }

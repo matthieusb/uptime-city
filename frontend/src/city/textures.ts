@@ -52,6 +52,8 @@ const LABEL_PADDING_PX = 4
 
 export interface LabelTexture {
   texture: CanvasTexture
+  // The badges that breathe, drawn apart on a layer of the same size.
+  pulse?: CanvasTexture
   // Size on screen, in CSS pixels.
   width: number
   height: number
@@ -60,14 +62,22 @@ export interface LabelTexture {
 export interface Badge {
   text: string
   color: string
+  // Defaults to the dark of the page.
+  textColor?: string
+  // Breathes, like the services it counts.
+  pulse?: boolean
 }
 
 const BADGE_FONT_PX = 9
 const BADGE_GAP_PX = 5
 
-// White text on a dark plate, like the 2D tooltips, with a small colored
-// badge after it.
-export function labelTexture(text: string, badge?: Badge): LabelTexture {
+// White text on a dark plate, like the 2D tooltips, with small colored badges
+// after it.
+export function labelTexture(
+  text: string,
+  badge?: Badge | Badge[],
+): LabelTexture {
+  const badges = badge === undefined ? [] : [badge].flat()
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')!
   const font = `${LABEL_FONT_PX * LABEL_SCALE}px monospace`
@@ -75,18 +85,27 @@ export function labelTexture(text: string, badge?: Badge): LabelTexture {
   ctx.font = font
   const textWidth = Math.ceil(ctx.measureText(text).width / LABEL_SCALE)
   ctx.font = badgeFont
-  const badgeWidth = badge
-    ? Math.ceil(ctx.measureText(badge.text).width / LABEL_SCALE) + 6
-    : 0
+  const badgeWidths = badges.map(
+    (b) => Math.ceil(ctx.measureText(b.text).width / LABEL_SCALE) + 6,
+  )
+  const gap = (first: boolean) => (first && !text ? 0 : BADGE_GAP_PX)
   const width =
     textWidth +
-    (badge ? (text ? BADGE_GAP_PX : 0) + badgeWidth : 0) +
+    badgeWidths.reduce((sum, w, i) => sum + gap(i === 0) + w, 0) +
     2 * LABEL_PADDING_PX
   const height = LABEL_FONT_PX + 2 * LABEL_PADDING_PX
   canvas.width = width * LABEL_SCALE
   canvas.height = height * LABEL_SCALE
+  // The breathing badges are on a layer of their own, to fade it alone.
+  const layer = badges.some((b) => b.pulse)
+    ? document.createElement('canvas')
+    : null
+  if (layer) {
+    layer.width = canvas.width
+    layer.height = canvas.height
+  }
   // Resizing the canvas resets its context.
-  // A badge alone sits straight on the scene, without the plate.
+  // Badges alone sit straight on the scene, without the plate.
   if (text) {
     ctx.fillStyle = 'rgb(0 0 0 / 0.6)'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
@@ -96,30 +115,39 @@ export function labelTexture(text: string, badge?: Badge): LabelTexture {
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
   ctx.fillText(text, LABEL_PADDING_PX * LABEL_SCALE, canvas.height / 2)
-  if (badge) {
-    const gap = text ? BADGE_GAP_PX : 0
-    const x = (LABEL_PADDING_PX + textWidth + gap) * LABEL_SCALE
+  let at = LABEL_PADDING_PX + textWidth
+  badges.forEach((b, i) => {
+    at += gap(i === 0)
+    const x = at * LABEL_SCALE
     const badgeHeight = (BADGE_FONT_PX + 4) * LABEL_SCALE
-    ctx.fillStyle = badge.color
-    ctx.beginPath()
-    ctx.roundRect(
+    const draw = (b.pulse && layer?.getContext('2d')) || ctx
+    draw.fillStyle = b.color
+    draw.beginPath()
+    draw.roundRect(
       x,
       (canvas.height - badgeHeight) / 2,
-      badgeWidth * LABEL_SCALE,
+      badgeWidths[i] * LABEL_SCALE,
       badgeHeight,
       badgeHeight / 2,
     )
-    ctx.fill()
-    ctx.font = badgeFont
-    ctx.fillStyle = '#0f1115'
-    ctx.textAlign = 'center'
-    ctx.fillText(
-      badge.text,
-      x + (badgeWidth * LABEL_SCALE) / 2,
+    draw.fill()
+    draw.font = badgeFont
+    draw.fillStyle = b.textColor ?? '#0f1115'
+    draw.textAlign = 'center'
+    draw.textBaseline = 'middle'
+    draw.fillText(
+      b.text,
+      x + (badgeWidths[i] * LABEL_SCALE) / 2,
       canvas.height / 2 + 1,
     )
-  }
+    at += badgeWidths[i]
+  })
   const texture = new CanvasTexture(canvas)
   texture.colorSpace = SRGBColorSpace
-  return { texture, width, height }
+  let pulse: CanvasTexture | undefined
+  if (layer) {
+    pulse = new CanvasTexture(layer)
+    pulse.colorSpace = SRGBColorSpace
+  }
+  return { texture, pulse, width, height }
 }

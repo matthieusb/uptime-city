@@ -1,12 +1,12 @@
 import asyncio
 import socket
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
 
-from uptime_city.config.models import Config, Endpoint, PhysicalHost
+from uptime_city.config.models import ClientConfig, Config, Endpoint, PhysicalHost
 from uptime_city.monitor.scheduler import Monitor
 from uptime_city.probes.base import ProbeResult
 from uptime_city.probes.tcp import connect
@@ -77,3 +77,26 @@ async def test_monitor_dispatches_tcp_to_connect() -> None:
         task.cancel()
     assert monitor.history("pg")[0].success
     mock.assert_awaited_with("db", 5432)
+
+
+async def test_monitor_gives_tcp_connect_the_timeout_of_its_endpoint() -> None:
+    async def icmp(hostname: str, timeout: float) -> ProbeResult:
+        raise AssertionError("icmp probe must not be used")
+
+    config = Config(
+        hosts=[
+            PhysicalHost(
+                name="pg",
+                url="tcp://db:5432",
+                interval=timedelta(milliseconds=10),
+                client=ClientConfig(timeout=timedelta(seconds=25)),
+            )
+        ]
+    )
+    monitor = Monitor(config, icmp)
+    connect_mock = AsyncMock(return_value=ProbeResult(ts=datetime.now(UTC), success=True))
+    with patch("uptime_city.monitor.scheduler.connect", connect_mock):
+        task = asyncio.create_task(monitor.run())
+        await asyncio.sleep(0.05)
+        task.cancel()
+    connect_mock.assert_awaited_with("db", 5432, 25)

@@ -170,6 +170,7 @@ body {
 }
 
 .city {
+  position: relative;
   box-sizing: border-box;
   height: calc(100% - 1rem);
   min-height: 420px;
@@ -270,4 +271,202 @@ body {
   color: #f5a623;
   border: 1px solid #f5a623;
   border-radius: 999px;
+}
+
+/* The physical host in focus, over the top left of the 3D view. */
+.city-title {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.35rem 0.7rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--text);
+  background: rgba(15, 17, 21, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.city-title-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The same small pill as the host tag on the map. */
+.city-title-badge {
+  flex: none;
+  padding: 0.05rem 0.5rem;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--bg);
+  border-radius: 999px;
+}
+
+/* The checklist of label kinds, over the top right of the 3D view. */
+.city-legend {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  gap: 0.35rem;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  color: var(--text);
+  background: rgba(15, 17, 21, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.city-legend-title {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.city-legend label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0;
+  cursor: pointer;
+}
+
+.city-legend input {
+  flex: none;
+  margin: 0;
+}
+
+.city-legend .city-badge {
+  /* The same width for all. */
+  min-width: 4.5rem;
+  padding: 0 0.45rem;
+  font-family: monospace;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--bg);
+  border-radius: 999px;
+}
+
+/* The 2D view of the building in focus, over the top right of the 3D view. */
+.building-panel {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  box-sizing: border-box;
+  width: 18rem;
+  max-width: calc(100% - 1.5rem);
+  max-height: calc(100% - 1.5rem);
+  padding: 0.6rem 0.75rem;
+  overflow-y: auto;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: rgba(15, 17, 21, 0.88);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.building-panel header {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.building-panel-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.building-panel ol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.building-panel li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.3rem 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.building-panel-empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.building-panel-service {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.building-panel .bars {
+  height: 16px;
+}
+
+/* The panel scrolls, so a tooltip would be cut at its sides: it opens inward
+   from the bar, to the right in the left half of the bars and to the left in
+   the other half. */
+.building-panel .bar-tooltip {
+  left: 0;
+  transform: none;
+}
+
+.building-panel .bar:nth-child(n + 16) .bar-tooltip {
+  left: auto;
+  right: 0;
+}
+
+.building-panel-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.building-panel-status {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* The badges that count services breathe, as slowly as the buildings glow. */
+.breathing {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breathing {
+    animation: none;
+  }
 }

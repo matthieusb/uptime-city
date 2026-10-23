@@ -8,8 +8,6 @@ from uptime_city.probes.http import probe_http
 from uptime_city.probes.tcp import connect
 
 HISTORY_SIZE = 50
-# For TCP and ICMP checks: `client.timeout` only applies to HTTP so far.
-PROBE_TIMEOUT_S = 5.0
 
 
 class Monitor:
@@ -26,6 +24,33 @@ class Monitor:
     def history(self, endpoint_id: str, limit: int = HISTORY_SIZE) -> list[ProbeResult]:
         """Last `limit` results, oldest first."""
         return list(self._results[endpoint_id])[-limit:]
+
+    def _counts(self, host_ids: set[str]) -> tuple[int, int]:
+        latest = [
+            self._results[e.id][-1]
+            for e in self.endpoints.values()
+            if e.kind == "service" and e.host_id in host_ids and self._results[e.id]
+        ]
+        up = sum(1 for result in latest if result.success)
+        return up, len(latest) - up
+
+    def building_counts(self, host_id: str) -> tuple[int, int]:
+        """How many services right on a host (physical or vm) are up and down, as of their last result.
+
+        A service not probed yet counts for neither.
+        """
+        return self._counts({host_id})
+
+    def service_counts(self, physical_id: str) -> tuple[int, int]:
+        """The same for a physical host, with the services of its vm-hosts too."""
+        return self._counts(
+            {physical_id}
+            | {
+                e.id
+                for e in self.endpoints.values()
+                if e.kind == "vm" and e.parent_id == physical_id
+            }
+        )
 
     async def run(self) -> None:
         async with asyncio.TaskGroup() as group:
@@ -44,9 +69,10 @@ class Monitor:
             )
         if endpoint.is_http:
             return await probe_http(endpoint)
+        timeout = endpoint.client.timeout.total_seconds()
         if endpoint.scheme == "tcp" and endpoint.port is not None:
-            return await connect(endpoint.hostname, endpoint.port, PROBE_TIMEOUT_S)
-        return await self._probe(endpoint.hostname, PROBE_TIMEOUT_S)
+            return await connect(endpoint.hostname, endpoint.port, timeout)
+        return await self._probe(endpoint.hostname, timeout)
 
     async def _loop(self, endpoint: Endpoint) -> None:
         while True:
