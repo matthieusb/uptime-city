@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -33,7 +34,13 @@ def _to_duration(value: object) -> object:
     return parse_duration(value) if isinstance(value, str) else value
 
 
-Duration = Annotated[timedelta, BeforeValidator(_to_duration)]
+def _positive(value: timedelta) -> timedelta:
+    if value <= timedelta(0):
+        raise ValueError("a duration must be positive")
+    return value
+
+
+Duration = Annotated[timedelta, BeforeValidator(_to_duration), AfterValidator(_positive)]
 
 Kind = Literal["physical", "vm", "service"]
 
