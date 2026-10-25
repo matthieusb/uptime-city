@@ -3,10 +3,11 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from uptime_city.config.models import Config, StorageConfig
-from uptime_city.main import create_app
+from uptime_city.main import create_app, parse_args
 from uptime_city.probes.base import ProbeResult
 from uptime_city.storage.database import Database
 
@@ -283,3 +284,23 @@ def test_the_simulated_statuses_are_not_kept(tmp_path: Path) -> None:
     with make_client(simulate=True, storage=storage) as client:
         assert client.get("/api/v1/endpoints/macro-server-1/history").json()
     assert asyncio.run(stored_results(storage)) == 0
+
+
+def test_server_listens_on_localhost_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("UPTIME_CITY_HOST", raising=False)
+    monkeypatch.delenv("UPTIME_CITY_PORT", raising=False)
+    args = parse_args([])
+    assert (args.host, args.port) == ("127.0.0.1", 8000)
+
+
+def test_server_address_can_be_set_by_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("UPTIME_CITY_HOST", "0.0.0.0")
+    monkeypatch.setenv("UPTIME_CITY_PORT", "9000")
+    args = parse_args([])
+    assert (args.host, args.port) == ("0.0.0.0", 9000)
+
+
+def test_server_address_flags_override_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("UPTIME_CITY_HOST", "0.0.0.0")
+    args = parse_args(["--host", "10.0.0.5", "--port", "8123"])
+    assert (args.host, args.port) == ("10.0.0.5", 8123)
