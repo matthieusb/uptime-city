@@ -66,6 +66,8 @@ import { NUKE_HEIGHT } from './effects/nukeShape'
 import BuildingPanel from './BuildingPanel'
 import HostTitle from './HostTitle'
 import DensityMenu from './DensityMenu'
+import Toolbox from './Toolbox'
+import { setWorldSeed } from './seed'
 import DetailMenu from './DetailMenu'
 import { NORMAL_DETAIL, detailSettings } from './detail'
 import EffectMenu from './EffectMenu'
@@ -152,12 +154,18 @@ export default function CityView({
   endpoints,
   labName,
   refreshMenu,
+  seed = '',
+  onRegenerate,
 }: {
   endpoints: EndpointInfo[]
   // The name of the lab, set in the backend's config, over the whole map.
   labName?: string
   // The box that picks the refresh period, below the other menus.
   refreshMenu?: ReactNode
+  // What the layout of the city is drawn from, kept by the backend.
+  seed?: string
+  // Asks for another city, with a new seed.
+  onRegenerate?: () => void
 }) {
   // One neighbourhood per physical host, one building per vm-host and one for
   // the physical host itself, and one floor per service.
@@ -171,19 +179,18 @@ export default function CityView({
     combine: (results) =>
       new Map(endpoints.map((e, i) => [e.id, results[i].data])),
   })
-  const world = useMemo(
-    () =>
-      worldLayout(
-        groups.map((group) => ({
-          id: group.host.id,
-          buildings: [group, ...group.vms].map((b) => ({
-            id: b.host.id,
-            services: b.services.length,
-          })),
+  const world = useMemo(() => {
+    setWorldSeed(seed)
+    return worldLayout(
+      groups.map((group) => ({
+        id: group.host.id,
+        buildings: [group, ...group.vms].map((b) => ({
+          id: b.host.id,
+          services: b.services.length,
         })),
-      ),
-    [groups],
-  )
+      })),
+    )
+  }, [groups, seed])
   const groupOf = useMemo(
     () => new Map(groups.map((g) => [g.host.id, g])),
     [groups],
@@ -725,6 +732,7 @@ export default function CityView({
           {refreshMenu}
         </div>
       )}
+      {!focusedId && onRegenerate && <Toolbox onRegenerate={onRegenerate} />}
       {!focusedId && (
         <div ref={statusUi} className="status-ui">
           <StatusBadges

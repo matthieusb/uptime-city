@@ -21,6 +21,43 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/city': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** City */
+    get: operations['city_api_v1_city_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/city/regenerate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Regenerate City
+     * @description Draws a new seed for the city and keeps it.
+     */
+    post: operations['regenerate_city_api_v1_city_regenerate_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/simulation/refresh': {
     parameters: {
       query?: never
@@ -159,6 +196,11 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    /** CitySettings */
+    CitySettings: {
+      /** Seed */
+      seed: string
+    }
     /** EndpointInfo */
     EndpointInfo: {
       /** Id */
@@ -252,6 +294,46 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['Info']
+        }
+      }
+    }
+  }
+  city_api_v1_city_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CitySettings']
+        }
+      }
+    }
+  }
+  regenerate_city_api_v1_city_regenerate_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CitySettings']
         }
       }
     }

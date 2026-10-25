@@ -359,6 +359,8 @@ function Building({
         <Demolition
           id={lot.id}
           width={lot.width}
+          height={lot.height}
+          floors={lot.floors}
           delay={delay}
           collapse={collapse}
         />

@@ -1,9 +1,10 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 
-from uptime_city.config.models import ClientConfig, Config, PhysicalHost, Service
+from uptime_city.config.models import ClientConfig, Config, PhysicalHost, Service, StorageConfig
 from uptime_city.monitor.scheduler import Monitor
 from uptime_city.probes.base import ProbeResult
+from uptime_city.storage.database import Database
 
 TICK = timedelta(milliseconds=10)
 
@@ -126,3 +127,81 @@ async def test_monitor_gives_each_probe_the_timeout_of_its_endpoint() -> None:
     task.cancel()
 
     assert timeouts == {"srv": 30, "app": 12, "other": 30}
+
+
+async def memory_database() -> Database:
+    database = Database(StorageConfig(type="memory"))
+    await database.init()
+    return database
+
+
+async def test_monitor_saves_every_result() -> None:
+    async def probe(hostname: str, timeout: float) -> ProbeResult:
+        return ProbeResult(ts=datetime.now(UTC), success=True, latency_ms=1.0)
+
+    database = await memory_database()
+    monitor = Monitor(make_config(), probe, database=database)
+    task = asyncio.create_task(monitor.run())
+    while len(monitor.history("srv")) < 3:
+        await asyncio.sleep(0.01)
+    task.cancel()
+
+    assert len(await database.results.recent("srv", 50)) >= 3
+    await database.close()
+
+
+async def test_monitor_starts_with_the_results_of_the_last_run() -> None:
+    database = await memory_database()
+    old = ProbeResult(ts=datetime.now(UTC) - timedelta(hours=2), success=False, error="late")
+    await database.results.add("srv", old)
+
+    async def probe(hostname: str, timeout: float) -> ProbeResult:
+        return ProbeResult(ts=datetime.now(UTC), success=True, latency_ms=1.0)
+
+    monitor = Monitor(make_config(), probe, database=database)
+    task = asyncio.create_task(monitor.run())
+    while len(monitor.history("srv")) < 2:
+        await asyncio.sleep(0.01)
+    task.cancel()
+
+    history = monitor.history("srv")
+    assert history[0] == old
+    assert history[1].success is True
+    await database.close()
+
+
+async def test_monitor_drops_the_results_older_than_the_retention() -> None:
+    database = await memory_database()
+    await database.results.add(
+        "srv", ProbeResult(ts=datetime.now(UTC) - timedelta(days=31), success=True)
+    )
+    recent = ProbeResult(ts=datetime.now(UTC) - timedelta(days=29), success=True)
+    await database.results.add("srv", recent)
+
+    async def probe(hostname: str, timeout: float) -> ProbeResult:
+        return ProbeResult(ts=datetime.now(UTC), success=True, latency_ms=1.0)
+
+    monitor = Monitor(make_config(), probe, database=database)
+    task = asyncio.create_task(monitor.run())
+    while len(monitor.history("srv")) < 2:
+        await asyncio.sleep(0.01)
+    task.cancel()
+
+    assert monitor.history("srv")[0] == recent
+    stored = await database.results.recent("srv", 50)
+    assert all(r.ts > datetime.now(UTC) - timedelta(days=30) for r in stored)
+    await database.close()
+
+
+async def test_a_failing_database_does_not_stop_the_monitoring() -> None:
+    async def probe(hostname: str, timeout: float) -> ProbeResult:
+        return ProbeResult(ts=datetime.now(UTC), success=True, latency_ms=1.0)
+
+    # Once closed, a memory database comes back empty, without its tables: every query fails.
+    broken = await memory_database()
+    await broken.close()
+    monitor = Monitor(make_config(), probe, database=broken)
+    task = asyncio.create_task(monitor.run())
+    while len(monitor.history("srv")) < 3:
+        await asyncio.sleep(0.01)
+    task.cancel()

@@ -18,6 +18,7 @@
 // of the previous road cannot hide it. Trees and parasols that would stand in front of a building are left
 // out.
 
+import { seeded } from './seed'
 import { biomeAt, treeFor, weightOf, type Biome, type Biomes } from './biomes'
 import type { TrackPiece } from './tracks'
 
@@ -355,7 +356,8 @@ export interface CityLayout {
   biomes: Biomes
 }
 
-export function hash(text: string): number {
+export function hash(plain: string): number {
+  const text = seeded(plain)
   // FNV-1a
   let h = 0x811c9dc5
   for (let i = 0; i < text.length; i++) {

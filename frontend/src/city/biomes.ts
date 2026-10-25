@@ -2,6 +2,7 @@
 // or wild tile, has a main biome and may have a second one on one of its
 // sides, with a band where both mix in between. Each tile of the ground ends
 // up with one biome, which decides its colors and what grows on it.
+import { seeded } from './seed'
 import type { TreeKind } from './layout'
 
 export type Biome =
@@ -35,7 +36,8 @@ export interface Spot {
   front: boolean
 }
 
-function hash(text: string): number {
+function hash(plain: string): number {
+  const text = seeded(plain)
   // FNV-1a
   let h = 0x811c9dc5
   for (let i = 0; i < text.length; i++) {

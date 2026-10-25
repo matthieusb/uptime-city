@@ -17,14 +17,20 @@ vi.mock('../../src/city/CityView', () => ({
   default: function CityStub({
     endpoints,
     refreshMenu,
+    seed,
+    onRegenerate,
   }: {
     endpoints: EndpointInfo[]
     refreshMenu: ReactNode
+    seed: string
+    onRegenerate: () => void
   }) {
     useQueries({ queries: endpoints.map(historyQuery) })
     return (
       <div data-testid="city-view">
         {refreshMenu}
+        <span data-testid="city-seed">{seed}</span>
+        <button onClick={onRegenerate}>regenerate</button>
         {endpoints.map((e) => (
           <span key={e.id} data-testid="city-building" />
         ))}
@@ -69,6 +75,7 @@ async function renderApp(
   simulation = false,
   nextRefreshInS = 42,
   running = false,
+  seed = '',
 ) {
   vi.stubGlobal(
     'fetch',
@@ -79,6 +86,9 @@ async function renderApp(
           simulation_running: simulation && running,
           next_refresh_in_s: simulation ? nextRefreshInS : null,
         })
+      if (url.endsWith('/city')) return Response.json({ seed })
+      if (url.endsWith('/city/regenerate'))
+        return Response.json({ seed: 'fresh' })
       return Response.json(
         url.endsWith('/endpoints') ? endpoints : historyOf(url),
       )
@@ -260,4 +270,44 @@ it('shows the city, with one building per endpoint', async () => {
 
   expect(await screen.findByTestId('city-view')).toBeTruthy()
   expect(await screen.findAllByTestId('city-building')).toHaveLength(1)
+})
+
+it('names the app Uptime City, preceded by a building emoji', async () => {
+  await renderApp()
+  await screen.findByTestId('city-view')
+  expect(
+    screen.getByRole('heading', { level: 1, name: '🏙️ Uptime City' }),
+  ).toBeTruthy()
+})
+
+it('builds the city with the seed kept by the backend', async () => {
+  await renderApp([endpoint], () => results, false, 42, false, 'kept')
+
+  expect((await screen.findByTestId('city-seed')).textContent).toBe('kept')
+})
+
+it('posts to regenerate the city, showing the splash screen until the new one is built', async () => {
+  await renderApp()
+  await screen.findByTestId('city-view')
+
+  await userEvent.click(screen.getByRole('button', { name: 'regenerate' }))
+
+  expect(await screen.findByText('Building the city…')).toBeTruthy()
+  expect(screen.queryByTestId('city-view')).toBeNull()
+  await waitFor(
+    () => {
+      expect(
+        vi
+          .mocked(fetch)
+          .mock.calls.some(
+            ([url, init]) =>
+              String(url).endsWith('/city/regenerate') &&
+              init?.method === 'POST',
+          ),
+      ).toBe(true)
+      expect(screen.queryByText('Building the city…')).toBeNull()
+      expect(screen.getByTestId('city-seed').textContent).toBe('fresh')
+    },
+    { timeout: 3000 },
+  )
 })

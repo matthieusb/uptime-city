@@ -257,6 +257,62 @@ button.city-title-badge[aria-pressed='true'] {
   max-width: calc(100% - 1.5rem);
 }
 
+/* The toolbox, over the bottom right of the 3D view: its menu opens above the icon. */
+.city-toolbox {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.city-toolbox-toggle {
+  box-sizing: border-box;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text);
+  background: rgba(15, 17, 21, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.city-toolbox-toggle[aria-expanded='true'] {
+  border-color: var(--text);
+}
+
+.city-toolbox .city-legend button {
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* The action stands out from the box: a solid accent background. */
+.city-toolbox .city-legend button.city-toolbox-action {
+  color: #fff;
+  font-weight: 600;
+  background: #2f6fed;
+  border-color: #5b8ff5;
+}
+
+.city-toolbox .city-legend button.city-toolbox-action:hover:not(:disabled) {
+  background: #4a82f2;
+}
+
+.city-toolbox .city-legend button:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
 /* A checklist of label kinds or effects. */
 .city-legend {
   display: flex;
@@ -380,29 +436,152 @@ button.city-title-badge[aria-pressed='true'] {
   border-radius: 4px;
 }
 
-/* A service of the list over the map: the whole box is a button. */
-.building-panel li:has(> .status-panel-row) {
-  padding: 0;
+/* The icons of a service of a panel, a little apart: the building and the graph. */
+.panel-actions {
+  display: flex;
+  flex: none;
+  gap: 0.4rem;
 }
 
-.status-panel-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  width: 100%;
-  padding: 0.3rem 0.5rem;
+.panel-action {
+  flex: none;
+  padding: 0 0.2rem;
   font: inherit;
+  line-height: 1.2;
   color: inherit;
-  text-align: left;
   cursor: pointer;
   background: none;
-  border: 0;
+  border: 1px solid var(--border);
   border-radius: 4px;
 }
 
-.status-panel-row:hover,
-.status-panel-row:focus-visible {
-  outline: 1px solid var(--text);
+.panel-action:hover,
+.panel-action:focus-visible,
+.panel-action[aria-pressed='true'] {
+  border-color: var(--text);
+  outline: none;
+}
+
+/* The graph of a service, in a black box like the panels, beside the one it was opened from. It
+   fills the room between them and the menus, is moved by its title bar and resized by its bottom
+   right corner. */
+.service-graph {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 29rem;
+  min-width: 14rem;
+  min-height: 17rem;
+  max-height: calc(100% - 1.5rem);
+  padding: 0.6rem 0.75rem;
+  overflow: hidden;
+  font-size: 0.85rem;
+  color: var(--text);
+  resize: both;
+  background: rgba(15, 17, 21, 0.88);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.service-graph header {
+  display: flex;
+  flex: none;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+  cursor: grab;
+  user-select: none;
+}
+
+.service-graph header:active {
+  cursor: grabbing;
+}
+
+/* The drawing is as big as this, in pixels, and the tooltip floats over it. */
+.service-graph-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.service-graph svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+/* The four cards of figures under the graph. */
+.graph-stats {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.graph-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.graph-stat-name {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.graph-stat-value {
+  font-family: monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+/* The status of the service, like the badge of a host in focus. */
+.graph-stat-badge {
+  align-self: flex-start;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.8rem;
+  color: var(--bg);
+  border-radius: 999px;
+}
+
+.graph-tooltip {
+  position: absolute;
+  z-index: 1;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  pointer-events: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.graph-tooltip-time {
+  color: var(--muted);
+}
+
+.graph-tooltip-error {
+  color: #e74c3c;
+}
+
+.graph-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.graph-label {
+  font-size: 10px;
+  fill: var(--muted);
 }
 
 .building-panel-empty {
@@ -435,9 +614,47 @@ button.city-title-badge[aria-pressed='true'] {
 
 .building-panel-name {
   flex: 1;
+  min-width: 0;
+}
+
+/* A name too long for its box slides to its end and back, pausing at both ends. */
+.marquee {
+  display: block;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.marquee-text {
+  display: block;
+  width: max-content;
   white-space: nowrap;
+}
+
+.marquee-text.scrolling {
+  animation: marquee var(--marquee-duration) ease-in-out infinite alternate;
+}
+
+@keyframes marquee {
+  0%,
+  25% {
+    transform: translateX(0);
+  }
+
+  75%,
+  100% {
+    transform: translateX(var(--marquee-shift));
+  }
+}
+
+/* Without motion, the name is cut short with an ellipsis, and the tooltip shows it whole. */
+@media (prefers-reduced-motion: reduce) {
+  .marquee-text,
+  .marquee-text.scrolling {
+    width: auto;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    animation: none;
+  }
 }
 
 .building-panel-status {

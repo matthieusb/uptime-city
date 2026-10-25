@@ -1,6 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { lazy, Suspense } from 'react'
-import { fetchEndpoints, fetchInfo } from './api/client'
+import {
+  fetchCity,
+  fetchEndpoints,
+  fetchInfo,
+  regenerateCity,
+} from './api/client'
 import RefreshSelector, {
   decodeRefresh,
   type RefreshMode,
@@ -13,6 +18,9 @@ import { usePersistentState } from './ui/usePersistentState'
 // Lazy, so that three.js is only loaded once the endpoints are there.
 const CityView = lazy(() => import('./city/CityView'))
 
+// The splash screen stays at least this long over a regeneration, so that it does not just flash.
+const MIN_REGENERATION_MS = 500
+
 export default function App() {
   // The refresh the user picked, if any, kept for the next visit.
   const [picked, setRefresh] = usePersistentState<RefreshMode | null>(
@@ -23,6 +31,19 @@ export default function App() {
   const { data: endpoints } = useQuery({
     queryKey: ['endpoints'],
     queryFn: fetchEndpoints,
+  })
+  const queryClient = useQueryClient()
+  // What the layout of the city is drawn from.
+  const { data: city } = useQuery({ queryKey: ['city'], queryFn: fetchCity })
+  const regenerate = useMutation({
+    mutationFn: async () => {
+      const [next] = await Promise.all([
+        regenerateCity(),
+        new Promise((resolve) => setTimeout(resolve, MIN_REGENERATION_MS)),
+      ])
+      return next
+    },
+    onSuccess: (next) => queryClient.setQueryData(['city'], next),
   })
   // Polled so that the counter stays in step with the backend's refreshes.
   const { data: info, dataUpdatedAt } = useQuery({
@@ -46,18 +67,22 @@ export default function App() {
       ? null
       : dataUpdatedAt + nextRefreshInS * 1000,
   )
+  // The city goes away behind the splash screen while a new one is drawn.
+  const ready = !!endpoints && !!city && !regenerate.isPending
   return (
     <main className="app">
       <header className="app-header">
-        <h1>uptime-city</h1>
+        <h1>🏙️ Uptime City</h1>
       </header>
       <div className="app-view">
-        {!endpoints && <SplashScreen message="Building the city…" />}
-        {endpoints && (
+        {!ready && <SplashScreen message="Building the city…" />}
+        {endpoints && city && ready && (
           <Suspense fallback={<SplashScreen message="Building the city…" />}>
             <CityView
               endpoints={endpoints}
               labName={info?.lab_name}
+              seed={city.seed}
+              onRegenerate={() => regenerate.mutate()}
               refreshMenu={
                 <RefreshSelector
                   value={refresh}

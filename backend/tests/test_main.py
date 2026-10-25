@@ -1,19 +1,28 @@
+import asyncio
+import time
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from uptime_city.config.models import Config
+from uptime_city.config.models import Config, StorageConfig
 from uptime_city.main import create_app
 from uptime_city.probes.base import ProbeResult
+from uptime_city.storage.database import Database
 
 
 async def ok_probe(hostname: str, timeout: float) -> ProbeResult:
     return ProbeResult(ts=datetime.now(UTC), success=True, latency_ms=2.0)
 
 
-def make_client(simulate: bool = False, lab_name: str | None = None) -> TestClient:
+def make_client(
+    simulate: bool = False,
+    lab_name: str | None = None,
+    storage: dict[str, str] | None = None,
+) -> TestClient:
     config = Config.model_validate(
         {
+            "storage": storage or {"type": "memory"},
             **({"lab-name": lab_name} if lab_name else {}),
             "hosts": [
                 {
@@ -222,3 +231,55 @@ def test_history_returns_results() -> None:
 def test_history_unknown_endpoint() -> None:
     with make_client() as client:
         assert client.get("/api/v1/endpoints/nope/history").status_code == 404
+
+
+def test_city_seed_is_empty_until_regenerated() -> None:
+    with make_client() as client:
+        assert client.get("/api/v1/city").json() == {"seed": ""}
+
+
+def test_regenerating_the_city_gives_and_keeps_a_new_seed() -> None:
+    with make_client() as client:
+        first = client.post("/api/v1/city/regenerate").json()["seed"]
+        assert first != ""
+        assert client.get("/api/v1/city").json() == {"seed": first}
+        second = client.post("/api/v1/city/regenerate").json()["seed"]
+        assert second not in {"", first}
+        assert client.get("/api/v1/city").json() == {"seed": second}
+
+
+def test_the_city_seed_is_kept_across_restarts(tmp_path: Path) -> None:
+    storage = {"type": "sqlite", "path": str(tmp_path / "uptime.db")}
+    with make_client(storage=storage) as client:
+        seed = client.post("/api/v1/city/regenerate").json()["seed"]
+    with make_client(storage=storage) as client:
+        assert client.get("/api/v1/city").json() == {"seed": seed}
+
+
+def test_the_history_is_kept_across_restarts(tmp_path: Path) -> None:
+    storage = {"type": "sqlite", "path": str(tmp_path / "uptime.db")}
+    with make_client(storage=storage) as client:
+        while len(client.get("/api/v1/endpoints/macro-server-1/history").json()) < 3:
+            time.sleep(0.01)
+    restarted = datetime.now(UTC)
+    with make_client(storage=storage) as client:
+        history: list[dict[str, str]] = []
+        while not history:
+            history = client.get("/api/v1/endpoints/macro-server-1/history").json()
+            time.sleep(0.01)
+    assert datetime.fromisoformat(history[0]["ts"]) < restarted
+
+
+async def stored_results(storage: dict[str, str]) -> int:
+    database = Database(StorageConfig.model_validate(storage))
+    await database.init()
+    count = len(await database.results.recent("macro-server-1", 50))
+    await database.close()
+    return count
+
+
+def test_the_simulated_statuses_are_not_kept(tmp_path: Path) -> None:
+    storage = {"type": "sqlite", "path": str(tmp_path / "uptime.db")}
+    with make_client(simulate=True, storage=storage) as client:
+        assert client.get("/api/v1/endpoints/macro-server-1/history").json()
+    assert asyncio.run(stored_results(storage)) == 0
