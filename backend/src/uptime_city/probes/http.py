@@ -19,7 +19,7 @@ async def probe_http(endpoint: Endpoint) -> ProbeResult:
             response = await client.request(
                 endpoint.method, endpoint.url, headers=endpoint.headers, content=endpoint.body
             )
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, httpx.InvalidURL) as exc:
         return ProbeResult(ts=ts, success=False, error=f"{type(exc).__name__}: {exc}")
     latency_ms = (time.perf_counter() - start) * 1000
 

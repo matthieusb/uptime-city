@@ -152,6 +152,16 @@ class Monitor:
         return not self._results[endpoint.host_id][-1].success
 
     async def _check(self, endpoint: Endpoint) -> ProbeResult:
+        try:
+            return await self._probe_endpoint(endpoint)
+        except Exception as exc:
+            # A probe that raises is a failed check: it must not stop the other endpoints.
+            logger.exception("the check of %s raised", endpoint.id)
+            return ProbeResult(
+                ts=datetime.now(UTC), success=False, error=f"{type(exc).__name__}: {exc}"
+            )
+
+    async def _probe_endpoint(self, endpoint: Endpoint) -> ProbeResult:
         if self._host_is_down(endpoint):
             return ProbeResult(
                 ts=datetime.now(UTC), success=False, error="host is down", host_down=True

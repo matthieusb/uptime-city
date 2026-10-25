@@ -78,3 +78,5 @@ uv run pytest
 ```
 
 Useful variants: `uv run pytest -k <name>` to select tests, `uv run pytest -x` to stop at the first failure.
+
+Tests are grouped in subfolders of `tests/` that mirror `src/uptime_city/`: `config/` (models, loader, validation), `probes/` (http, tcp and icmp probes), `monitor/` (scheduler and simulation), `storage/` (database, settings, results, gate), `api/` (HTTP routes) and `app/` (CLI, wiring and restart persistence). A `conditions/` folder will come with the condition evaluator. Helpers shared by several files live in `tests/helpers.py`.

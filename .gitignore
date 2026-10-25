@@ -6,6 +6,6 @@ backend/example/config.yaml
 # Personal/local configs
 backend/example/test/
 
-# Local self-hosting copies, made from docker-compose.example.yml and backend/example/config.example.yaml
+# Local self-hosting copies, made from the README and backend/example/config.example.yaml
 /docker-compose.yml
 /config.yaml
