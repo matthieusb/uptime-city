@@ -13,3 +13,7 @@ cd frontend && pnpm dev   # http://localhost:5173
 ```
 
 See `backend/README.md` and `frontend/README.md` for details.
+
+## Contributing
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the checks to run, the commit conventions, the Docker images and the release process (reserved to maintainers).
