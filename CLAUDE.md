@@ -56,3 +56,7 @@ POST /api/v1/simulation/actions/{action}[?count=n] → one event by hand: reset,
 ### Types
 - TypeScript types are generated from `/openapi.json` with `openapi-typescript`.
 - CI fails when the generated types drift from the spec.
+
+## Release
+
+- Manual workflow `.github/workflows/release.yml` (Actions tab, pick patch, minor or major): it tags the latest commit of `main` as `vX.Y.Z` (first release `v0.1.0`), pushes `ghcr.io/<owner>/uptime-city-backend` and `-frontend` images tagged with the version, and creates the GitHub release. The tag and the release are created only after both images are pushed.
