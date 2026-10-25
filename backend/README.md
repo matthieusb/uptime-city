@@ -27,7 +27,7 @@ uv run pyright           # type check (strict)
 uv run uptime-city --config example/config.yaml
 ```
 
-`--config` is the monitoring config file (default: `config.yaml` in the current directory). `--simulate` (`-s`) probes nothing and fakes statuses instead, with consistent outages (a down host takes its vm-hosts and services down), redrawn every 30 seconds. The API listens on http://127.0.0.1:8000 (health check: `/api/v1/health`, OpenAPI spec: `/openapi.json`, docs: `/docs`). The last 50 results are kept in memory (history is lost on restart).
+`--config` is the monitoring config file (default: `config.yaml` in the current directory). `--simulate` (`-s`, or the `SIMULATION_MODE=true` environment variable) probes nothing and fakes statuses instead, with consistent outages (a down host takes its vm-hosts and services down), redrawn every 30 seconds. The API listens on http://127.0.0.1:8000 (health check: `/api/v1/health`, OpenAPI spec: `/openapi.json`, docs: `/docs`). The last 50 results are kept in memory (history is lost on restart).
 
 ## Test with your own configuration
 

@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import contextlib
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,13 +16,16 @@ from uptime_city.monitor.scheduler import Monitor
 from uptime_city.monitor.simulation import Simulation
 from uptime_city.probes.base import Probe
 from uptime_city.probes.icmp import ping
+from uptime_city.storage.database import Database
 
 
 def create_app(config: Config, probe: Probe = ping, simulate: bool = False) -> FastAPI:
-    monitor = Monitor(config, probe, Simulation(config) if simulate else None)
+    database = Database(config.storage)
+    monitor = Monitor(config, probe, Simulation(config) if simulate else None, database)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+        await database.init()
         task = asyncio.create_task(monitor.run())
         try:
             yield
@@ -29,9 +33,11 @@ def create_app(config: Config, probe: Probe = ping, simulate: bool = False) -> F
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
+            await database.close()
 
     app = FastAPI(title="uptime-city", lifespan=lifespan)
     app.state.monitor = monitor
+    app.state.database = database
     app.include_router(router)
 
     @app.get("/api/v1/health")
@@ -41,6 +47,10 @@ def create_app(config: Config, probe: Probe = ping, simulate: bool = False) -> F
     return app
 
 
+def simulation_mode_from_env() -> bool:
+    return os.environ.get("SIMULATION_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="uptime-city")
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
@@ -48,7 +58,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "-s",
         "--simulate",
         action="store_true",
-        help="do not probe anything: simulate consistent statuses and outages, redrawn every 30 seconds once started (stopped at first)",
+        default=simulation_mode_from_env(),
+        help="do not probe anything: simulate consistent statuses and outages, redrawn every 30 seconds once started (stopped at first); also enabled by SIMULATION_MODE=true",
     )
     return parser.parse_args(argv)
 

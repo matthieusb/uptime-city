@@ -288,3 +288,24 @@ def test_revive_services_leaves_alone_the_ones_under_a_nuked_host() -> None:
     for vm in nuked.vm_hosts:
         expected |= {vm.id, *(s.id for s in vm.services)}
     assert down_ids(results) == expected
+
+
+@pytest.mark.parametrize("value", ["1", "true", "True", "yes", "on"])
+def test_simulation_mode_env_enables_the_simulation(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("SIMULATION_MODE", value)
+    assert parse_args([]).simulate is True
+
+
+@pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
+def test_simulation_mode_env_falsy_values_keep_it_off(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("SIMULATION_MODE", value)
+    assert parse_args([]).simulate is False
+
+
+def test_simulation_mode_env_unset_keeps_it_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SIMULATION_MODE", raising=False)
+    assert parse_args([]).simulate is False

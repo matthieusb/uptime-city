@@ -15,8 +15,8 @@ from pydantic import (
     model_validator,
 )
 
-_DURATION = re.compile(r"^(\d+(?:\.\d+)?)(ms|s|m|h)$")
-_UNITS = {"ms": 0.001, "s": 1, "m": 60, "h": 3600}
+_DURATION = re.compile(r"^(\d+(?:\.\d+)?)(ms|s|m|h|d)$")
+_UNITS = {"ms": 0.001, "s": 1, "m": 60, "h": 3600, "d": 86400}
 _ICMP_PREFIX = "icmp://"
 _HTTP_PREFIXES = ("http://", "https://")
 _TCP_PREFIX = "tcp://"
@@ -25,7 +25,7 @@ _TCP_PREFIX = "tcp://"
 def parse_duration(value: str) -> timedelta:
     match = _DURATION.match(value.strip())
     if match is None:
-        raise ValueError(f"invalid duration {value!r} (expected e.g. 30s, 5m, 1h)")
+        raise ValueError(f"invalid duration {value!r} (expected e.g. 30s, 5m, 1h, 30d)")
     return timedelta(seconds=float(match[1]) * _UNITS[match[2]])
 
 
@@ -181,6 +181,16 @@ class PhysicalHost(VmHost):
         return self
 
 
+class StorageConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["sqlite", "postgres", "memory"] = "sqlite"
+    path: str = "data/uptime.db"
+    """The SQLite file, or the PostgreSQL DSN (`postgres://user:pass@host/db`)."""
+    retention: Duration = timedelta(days=30)
+    """How long the results are kept: older ones are deleted."""
+
+
 class Config(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -188,6 +198,7 @@ class Config(BaseModel):
         default="lab-map", alias="lab-name"
     )
     """Shown over the 3D map, left of the service counts."""
+    storage: StorageConfig = StorageConfig()
     hosts: list[PhysicalHost]
 
     @model_validator(mode="after")

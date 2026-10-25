@@ -1,4 +1,4 @@
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
 import { Color, MeshLambertMaterial, type Group, type Sprite } from 'three'
 import { badgeBreath, buildingGlow, type BuildingState } from '../domain/status'
@@ -37,6 +37,7 @@ import {
 import { floorBuilt } from './effects/rebuildShape'
 import { floorBase, floorHeight, type Lot } from './layout'
 import type { Way } from './world'
+import { labelChange, labelShown, RESCALE, SHOW_CHANGED } from './labelView'
 import { floorTexture, labelTexture, type Badge } from './textures'
 
 export interface BuildingProps {
@@ -135,6 +136,7 @@ export function Label({
   order?: number
 }) {
   const hidden = useContext(LabelsHidden)
+  const gl = useThree((s) => s.gl)
   const sprite = useRef<Sprite>(null)
   const pulse = useRef<Sprite>(null)
   // Badges are often rebuilt on render: compare them by what they show.
@@ -150,21 +152,37 @@ export function Label({
     },
     [label],
   )
+  // What the last frame left. A label zoomed out of sight is never drawn, so its texture would only
+  // go to the GPU when it first shows, a hitch when zooming in: it is uploaded now instead.
+  const last = useRef({ shown: true, zoom: NaN })
+  useEffect(() => {
+    gl.initTexture(label.texture)
+    if (label.pulse) gl.initTexture(label.pulse)
+  }, [gl, label])
+  // A new texture or size needs its scale again.
+  useEffect(() => {
+    last.current.zoom = NaN
+  }, [label, size])
   useFrame(({ camera, clock }) => {
-    const shown = !hidden && camera.zoom >= minZoom
+    const shown = labelShown(hidden, camera.zoom, minZoom)
+    const state = last.current
+    const change = labelChange(state.shown, shown, state.zoom, camera.zoom)
+    if (change & SHOW_CHANGED) {
+      if (sprite.current) sprite.current.visible = shown
+      if (pulse.current) pulse.current.visible = shown
+      state.shown = shown
+    }
+    if (change & RESCALE) {
+      // The same size on screen whatever the zoom.
+      const w = (size * label.width) / camera.zoom
+      const h = (size * label.height) / camera.zoom
+      sprite.current?.scale.set(w, h, 1)
+      pulse.current?.scale.set(w, h, 1)
+      state.zoom = camera.zoom
+    }
     // The counting badges are a layer of their own, which breathes.
-    for (const [layer, opacity] of [
-      [sprite.current, 1],
-      [pulse.current, badgeBreath(clock.elapsedTime)],
-    ] as const) {
-      if (!layer) continue
-      layer.visible = shown
-      layer.material.opacity = opacity
-      layer.scale.set(
-        (size * label.width) / camera.zoom,
-        (size * label.height) / camera.zoom,
-        1,
-      )
+    if (shown && pulse.current) {
+      pulse.current.material.opacity = badgeBreath(clock.elapsedTime)
     }
   })
   return (
@@ -359,6 +377,8 @@ function Building({
         <Demolition
           id={lot.id}
           width={lot.width}
+          height={lot.height}
+          floors={lot.floors}
           delay={delay}
           collapse={collapse}
         />

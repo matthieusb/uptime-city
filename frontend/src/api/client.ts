@@ -2,6 +2,7 @@ import type { components, paths } from './types'
 
 export type EndpointInfo = components['schemas']['EndpointInfo']
 export type Info = components['schemas']['Info']
+export type CitySettings = components['schemas']['CitySettings']
 export type CheckResult = components['schemas']['ProbeResult']
 
 async function getJson<T>(path: string): Promise<T> {
@@ -48,3 +49,13 @@ export const fetchHistory = (id: string) =>
   getJson<CheckResult[]>(
     `/api/v1/endpoints/${encodeURIComponent(id)}/history?limit=50`,
   )
+
+export const fetchCity = () => getJson<CitySettings>('/api/v1/city')
+
+// Draws a new seed for the city, which the backend keeps.
+export async function regenerateCity(): Promise<CitySettings> {
+  const path = '/api/v1/city/regenerate'
+  const response = await fetch(path, { method: 'POST' })
+  if (!response.ok) throw new Error(`${path}: ${response.status}`)
+  return response.json() as Promise<CitySettings>
+}

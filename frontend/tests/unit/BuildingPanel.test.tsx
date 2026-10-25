@@ -1,4 +1,5 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it } from 'vitest'
 import BuildingPanel from '../../src/city/BuildingPanel'
 import { MAX_BARS } from '../../src/domain/checks'
@@ -32,7 +33,11 @@ it('lists every floor from the top down, with its status', () => {
   )
 
   const rows = screen.getAllByRole('listitem').map((li) => li.textContent)
-  expect(rows).toEqual(['audiobookshelfup', 'freshrssdown', 'karakeepunknown'])
+  expect(rows).toEqual([
+    '📈audiobookshelfup',
+    '📈freshrssdown',
+    '📈karakeepunknown',
+  ])
 })
 
 const check = (ts: string, success: boolean) => ({
@@ -129,4 +134,33 @@ it('shows no host status without one, or before the host was probed', () => {
     />,
   )
   expect(screen.queryByTestId('host-status')).toBeNull()
+})
+
+it('opens the graph of a floor from its graph button, and closes it again', async () => {
+  render(
+    <BuildingPanel
+      name="media-vm"
+      badge={badge}
+      floors={[
+        {
+          id: 'a',
+          name: 'audiobookshelf',
+          status: 'up',
+          results: [check('2026-01-01T00:00:00Z', true)],
+        },
+        { id: 'b', name: 'freshrss', status: 'up', results: [] },
+      ]}
+    />,
+  )
+  expect(screen.queryByRole('region')).toBeNull()
+
+  const button = screen.getByRole('button', { name: 'Graph of audiobookshelf' })
+  expect(button.textContent).toBe('📈')
+  await userEvent.click(button)
+  expect(
+    screen.getByRole('region', { name: 'Response times of audiobookshelf' }),
+  ).toBeTruthy()
+
+  await userEvent.click(screen.getByRole('button', { name: 'Close the graph' }))
+  expect(screen.queryByRole('region')).toBeNull()
 })

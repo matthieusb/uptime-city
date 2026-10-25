@@ -1,3 +1,4 @@
+import secrets
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -6,6 +7,7 @@ from pydantic import BaseModel
 from uptime_city.monitor.scheduler import HISTORY_SIZE, Monitor
 from uptime_city.monitor.simulation import Action
 from uptime_city.probes.base import ProbeResult
+from uptime_city.storage.settings import SettingsStore
 
 router = APIRouter(prefix="/api/v1")
 
@@ -33,6 +35,18 @@ class Info(BaseModel):
     """In simulation, the seconds until the statuses are redrawn: the full period while stopped."""
 
 
+class CitySettings(BaseModel):
+    seed: str
+    """Decides how the 3D city is laid out: empty until the city is first regenerated."""
+
+
+CITY_SEED = "city_seed"
+
+
+def _store(request: Request) -> SettingsStore:
+    return request.app.state.database.settings
+
+
 def _monitor(request: Request) -> Monitor:
     return request.app.state.monitor
 
@@ -46,6 +60,19 @@ async def info(request: Request) -> Info:
         simulation_running=monitor.simulation_running,
         next_refresh_in_s=monitor.next_refresh_in_s(),
     )
+
+
+@router.get("/city")
+async def city(request: Request) -> CitySettings:
+    return CitySettings(seed=await _store(request).get(CITY_SEED) or "")
+
+
+@router.post("/city/regenerate")
+async def regenerate_city(request: Request) -> CitySettings:
+    """Draws a new seed for the city and keeps it."""
+    seed = secrets.token_urlsafe(6)
+    await _store(request).set(CITY_SEED, seed)
+    return CitySettings(seed=seed)
 
 
 def _simulating(request: Request) -> Monitor:
