@@ -93,7 +93,7 @@ async def test_unsupported_condition_is_failed_check() -> None:
 def test_endpoint_defaults_and_validation() -> None:
     e = endpoint()
     assert e.method == "GET"
-    assert e.client.timeout.total_seconds() == 10
+    assert e.client.timeout.total_seconds() == 30
     assert not e.client.insecure
     with pytest.raises(ValidationError):
         endpoint(url="ftp://x")

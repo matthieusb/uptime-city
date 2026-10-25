@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   COLLAPSE_S,
+  REBUILD_S,
   collapseProgress,
+  demolitionElapsed,
+  PRELUDE_S,
+  smokeAge,
   floorPose,
   RUBBLE_HEIGHT,
+  rebuildProgress,
   trackCollapse,
   type Collapse,
 } from '../../src/city/collapse'
@@ -16,6 +21,25 @@ function track(...steps: [Status, number][]): Collapse {
   for (const [status, now] of steps) state = trackCollapse(state, status, now)
   return state!
 }
+
+describe('rebuild', () => {
+  it('goes back up over time once the host is back, then is done', () => {
+    let state = trackCollapse(null, 'up', 1)
+    state = trackCollapse(state, 'down', 5)
+    state = trackCollapse(state, 'up', 20, false, true)
+    expect(rebuildProgress(state, 20)).toBe(0)
+    expect(rebuildProgress(state, 20 + REBUILD_S / 2)).toBeCloseTo(0.5)
+    expect(rebuildProgress(state, 20 + REBUILD_S)).toBeNull()
+  })
+
+  it('does not happen when animations are off or the host never fell', () => {
+    const down = trackCollapse(trackCollapse(null, 'up', 1), 'down', 5)
+    expect(trackCollapse(down, 'up', 20).rebuildStart).toBeUndefined()
+    expect(
+      trackCollapse(null, 'up', 1, false, true).rebuildStart,
+    ).toBeUndefined()
+  })
+})
 
 describe('trackCollapse', () => {
   it('shows the ruins at once when the host is down on load', () => {
@@ -39,6 +63,15 @@ describe('trackCollapse', () => {
     expect(collapseProgress(state, 100)).toBe(1)
   })
 
+  it('waits for the hold to end before it falls', () => {
+    let state = trackCollapse(null, 'up', 1)
+    state = trackCollapse(state, 'down', 10, true)
+    expect(collapseProgress(state, 12)).toBe(0)
+    state = trackCollapse(state, 'down', 14, false)
+    expect(state.start).toBe(14)
+    expect(collapseProgress(state, 14 + COLLAPSE_S + 1)).toBe(1)
+  })
+
   it('keeps falling from where it started while the host stays down', () => {
     const state = track(['up', 1], ['down', 10], ['down', 11])
     expect(collapseProgress(state, 10 + COLLAPSE_S / 2)).toBe(
@@ -49,6 +82,39 @@ describe('trackCollapse', () => {
   it('stands again when the host is back up', () => {
     const state = track(['down', 1], ['up', 10])
     expect(collapseProgress(state, 10)).toBe(0)
+  })
+})
+
+describe('demolition and smoke', () => {
+  it('waits for the charges before the fall starts', () => {
+    const state = track(['up', 1], ['down', 10])
+    expect(collapseProgress(state, 10 + PRELUDE_S, PRELUDE_S)).toBe(0)
+    expect(
+      collapseProgress(state, 10 + PRELUDE_S + COLLAPSE_S / 2, PRELUDE_S),
+    ).toBeCloseTo(0.5)
+  })
+
+  it('sets charges off only between the host going down and the fall', () => {
+    const state = track(['up', 1], ['down', 10])
+    expect(demolitionElapsed(state, 9)).toBeNull()
+    expect(demolitionElapsed(state, 10.5)).toBeCloseTo(0.5)
+    expect(demolitionElapsed(state, 10 + PRELUDE_S + 0.01)).toBeNull()
+  })
+
+  it('raises dust once the building hit the ground', () => {
+    const state = track(['up', 1], ['down', 10])
+    const landed = 10 + PRELUDE_S + COLLAPSE_S
+    expect(smokeAge(state, landed - 0.1, PRELUDE_S)).toBeNull()
+    expect(smokeAge(state, landed + 1, PRELUDE_S)).toBeCloseTo(1)
+  })
+
+  it('has none for a building in ruins since the load, or standing', () => {
+    const ruins = track(['down', 5])
+    expect(demolitionElapsed(ruins, 5.2)).toBeNull()
+    expect(smokeAge(ruins, 100, PRELUDE_S)).toBeNull()
+    const standing = track(['up', 5])
+    expect(demolitionElapsed(standing, 6)).toBeNull()
+    expect(smokeAge(standing, 100)).toBeNull()
   })
 })
 

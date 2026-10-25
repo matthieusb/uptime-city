@@ -6,6 +6,7 @@ Python service that probes the configured services, stores the results and expos
 
 Checks follow Gatus's syntax (see its README) for a subset of its fields, but they are organized under hosts. The generic example config lives in `backend/example/config.example.yaml`; a local copy, `backend/example/config.yaml`, is git-ignored.
 
+- The top of the config can set `lab-name`, the name shown over the 3D map (default `lab-map`, never empty).
 - The top layer is made of **physical hosts** (`hosts:`). A physical host has its own check, which can be any supported check, and contains `services` and **vm-hosts** (`vm-hosts:`).
 - A **vm-host** has its own check and contains `services` only, never other hosts.
 - A service gives its full URL. It never inherits `interval` or `client` settings from its host.
@@ -15,6 +16,7 @@ Checks follow Gatus's syntax (see its README) for a subset of its fields, but th
 - A service's id is `<host-id>-<service-id>`, where the host is the physical host or the vm-host it is listed under. Ids must be unique across the config.
 
 ```yaml
+lab-name: my-lab        # shown over the 3D map; default lab-map
 storage:
   type: sqlite            # sqlite (default) | postgres | memory
   path: data/uptime.db    # or a postgres DSN: postgres://user:pass@host/db
@@ -50,7 +52,7 @@ hosts:
 ```
 
 ### v1
-- Check fields (hosts and services): `name`, `url`, `method`, `body`, `headers`, `interval` (default 60s), `enabled`, `client.timeout` (default 10s) and `client.insecure`.
+- Check fields (hosts and services): `name`, `url`, `method`, `body`, `headers`, `interval` (default 60s), `enabled`, `client.timeout` (default 30s, for every probe type) and `client.insecure`.
 - Schemes: `http(s)://`, `tcp://`, `icmp://`, and DNS. A DNS check has a `dns: {query-name, query-type}` block and uses the resolver as `url`.
 - Conditions have the form `"<placeholder> <op> <value>"`.
   - Operators: `== != < <= > >=`.
@@ -142,12 +144,18 @@ backend/tests/
 
 What exists today, one sentence per feature (see `.claude/rules/document-completed-features.md`). The sections above stay the target.
 
-- **Config**: YAML physical hosts, each with its own check, its services and its vm-hosts (which have services only), using `icmp://`, `tcp://` and `http(s)://` URLs, without `enabled` or `dns` yet, and each `http(s)://` check needs a `[STATUS]` condition. See `config/models.py` and `tests/test_config.py`.
+- **Config**: an optional `lab-name` (default `lab-map`), then YAML physical hosts, each with its own check, its services and its vm-hosts (which have services only), using `icmp://`, `tcp://` and `http(s)://` URLs, without `enabled` or `dns` yet, and each `http(s)://` check needs a `[STATUS]` condition. See `config/models.py` and `tests/test_config.py`.
 - **Vm-hosts**: the API tells each endpoint's `kind` (physical, vm or service) and a vm-host's `parent_id`; a down physical host does not affect its vm-hosts yet. See `config/models.py`, `tests/test_config.py` and `tests/test_main.py`.
 - **Host down**: a down host's services are recorded as down with `host_down`, without being probed. See `monitor/scheduler.py` and `tests/test_monitor.py`.
-- **HTTP probe**: a check succeeds when every condition passes. See `probes/http.py` and `tests/test_http_probe.py`.
+- **HTTP probe**: a check succeeds when every condition passes, and redirects are not followed, so a service that redirects needs a condition like `[STATUS] < 400`. See `probes/http.py` and `tests/test_http_probe.py`.
+- **Timeout**: each check gives up after its `client.timeout` (default 30s), HTTP, TCP and ICMP alike. See `config/models.py`, `monitor/scheduler.py`, `tests/test_monitor.py` and `tests/test_tcp_probe.py`.
 - **TCP probe**: a check succeeds when the connection opens in time. See `probes/tcp.py` and `tests/test_tcp_probe.py`.
 - **ICMP probe**: the default probe for any other scheme. See `probes/icmp.py` and `tests/test_monitor.py`.
 - **Conditions**: numeric comparisons on `[STATUS]` and `[RESPONSE_TIME]`, for HTTP only. See `conditions/evaluate.py` and `tests/test_http_probe.py`.
 - **Scheduler**: one loop per endpoint, keeping the last 50 results in memory (no storage yet). See `monitor/scheduler.py` and `tests/test_monitor.py`.
 - **API**: `GET /api/v1/endpoints` (each service carries its `host_id`, each endpoint its `kind` and each vm-host its `parent_id`) and `/endpoints/{id}/history`; no `/status` or `/events` yet. See `api/routes_endpoints.py` and `tests/test_main.py`.
+- **Simulation**: `--simulate` / `-s` probes nothing and fakes consistent statuses (a down host or vm-host takes its services down, 20% of services down, 5% in stand-by shown with `host_down` so the frontend colours them orange), redrawn every 30 seconds once started, and stopped at first (see Simulation start and stop). See `monitor/simulation.py`, `main.py` and `tests/test_simulation.py`.
+- **Simulation refresh**: `POST /api/v1/simulation/refresh` redraws the simulated statuses at once and restarts the 30 second countdown, and answers 404 when not simulating. See `monitor/scheduler.py` (`refresh_simulation`), `api/routes_endpoints.py` and `tests/test_main.py`.
+- **Simulation start and stop**: `POST /api/v1/simulation/start` and `/stop` start or stop the redrawing every period (stopped at first, a start restarting the countdown, a refresh working in both states), and answer 404 when not simulating. See `monitor/scheduler.py` (`start_simulation`, `stop_simulation`, `next_refresh_in_s`), `api/routes_endpoints.py` and `tests/test_simulation.py`, `tests/test_main.py`.
+- **Simulation actions**: while the simulation is stopped, `POST /api/v1/simulation/actions/{action}` (with `count` for services) makes an event by hand on the current simulated state, instead of a random redraw: everything up, a random physical host nuked (with its vm-hosts and services), a random vm-host on a host that is up demolished, `count` up services downed, and one host, one vm-host (on a host that is up) or `count` services (not under a down host or vm-host) revived; 409 while running, 404 when not simulating. See `monitor/simulation.py` (`State`, `render`, `Simulation.act`), `monitor/scheduler.py` (`act_on_simulation`), `api/routes_endpoints.py`, `tests/test_simulation.py` and `tests/test_main.py`.
+- **Info**: `GET /api/v1/info` tells the `lab_name` of the config, whether the backend is in simulation mode, whether it is running (`simulation_running`) and when the next simulated refresh comes (the full period while stopped), for the frontend badges. See `api/routes_endpoints.py` and `tests/test_main.py`.

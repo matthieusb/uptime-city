@@ -9,6 +9,7 @@ from pydantic import (
     ConfigDict,
     Field,
     PrivateAttr,
+    StringConstraints,
     computed_field,
     field_validator,
     model_validator,
@@ -38,7 +39,7 @@ Kind = Literal["physical", "vm", "service"]
 
 
 class ClientConfig(BaseModel):
-    timeout: Duration = timedelta(seconds=10)
+    timeout: Duration = timedelta(seconds=30)
     insecure: bool = False
 
 
@@ -181,8 +182,12 @@ class PhysicalHost(VmHost):
 
 
 class Config(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
+    lab_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] = Field(
+        default="lab-map", alias="lab-name"
+    )
+    """Shown over the 3D map, left of the service counts."""
     hosts: list[PhysicalHost]
 
     @model_validator(mode="after")

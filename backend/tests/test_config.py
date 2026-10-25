@@ -216,3 +216,29 @@ def test_config_rejects_duplicate_ids_across_vm_hosts(tmp_path: Path) -> None:
     )
     with pytest.raises(ValidationError, match="duplicate"):
         load_config(path)
+
+
+def test_lab_name_defaults_to_lab_map(tmp_path: Path) -> None:
+    config = load_config(write(tmp_path, "hosts:\n  - {name: a, url: icmp://a}\n"))
+    assert config.lab_name == "lab-map"
+
+
+def test_lab_name_can_be_set_at_the_top_of_the_config(tmp_path: Path) -> None:
+    config = load_config(
+        write(
+            tmp_path,
+            """
+            lab-name: Home lab
+            hosts:
+              - {name: a, url: icmp://a}
+            """,
+        )
+    )
+    assert config.lab_name == "Home lab"
+
+
+@pytest.mark.parametrize("value", ['""', '"   "'])
+def test_lab_name_cannot_be_empty(tmp_path: Path, value: str) -> None:
+    path = write(tmp_path, f"lab-name: {value}\nhosts:\n  - {{name: a, url: icmp://a}}\n")
+    with pytest.raises(ValidationError):
+        load_config(path)

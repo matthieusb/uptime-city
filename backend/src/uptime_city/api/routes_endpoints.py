@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from uptime_city.monitor.scheduler import HISTORY_SIZE, Monitor
+from uptime_city.monitor.simulation import Action
 from uptime_city.probes.base import ProbeResult
 
 router = APIRouter(prefix="/api/v1")
@@ -21,8 +22,71 @@ class EndpointInfo(BaseModel):
     """Set for vm-hosts: the id of the physical host they run on."""
 
 
+class Info(BaseModel):
+    lab_name: str
+    """The name of the lab, set by `lab-name` in the config."""
+    simulation: bool
+    """The statuses are faked, nothing is probed."""
+    simulation_running: bool
+    """In simulation, the statuses are redrawn every period: false until it is started."""
+    next_refresh_in_s: float | None
+    """In simulation, the seconds until the statuses are redrawn: the full period while stopped."""
+
+
 def _monitor(request: Request) -> Monitor:
     return request.app.state.monitor
+
+
+@router.get("/info")
+async def info(request: Request) -> Info:
+    monitor = _monitor(request)
+    return Info(
+        lab_name=monitor.lab_name,
+        simulation=monitor.simulation is not None,
+        simulation_running=monitor.simulation_running,
+        next_refresh_in_s=monitor.next_refresh_in_s(),
+    )
+
+
+def _simulating(request: Request) -> Monitor:
+    monitor = _monitor(request)
+    if monitor.simulation is None:
+        raise HTTPException(status_code=404, detail="the backend is not simulating")
+    return monitor
+
+
+@router.post("/simulation/refresh")
+async def refresh_simulation(request: Request) -> Info:
+    """Redraws the simulated statuses now. Only in simulation."""
+    _simulating(request).refresh_simulation()
+    return await info(request)
+
+
+@router.post("/simulation/start")
+async def start_simulation(request: Request) -> Info:
+    """Redraws the simulated statuses every period from now on. Only in simulation."""
+    _simulating(request).start_simulation()
+    return await info(request)
+
+
+@router.post("/simulation/stop")
+async def stop_simulation(request: Request) -> Info:
+    """Stops redrawing the simulated statuses by themselves. Only in simulation."""
+    _simulating(request).stop_simulation()
+    return await info(request)
+
+
+@router.post("/simulation/actions/{action}")
+async def simulation_action(request: Request, action: Action, count: int = Query(1, ge=1)) -> Info:
+    """Changes the simulated statuses by hand, instead of what would happen at random: `reset`
+    brings everything up, `nuke-host`, `demolish-vm`, `down-services` take a physical host, a
+    vm-host or `count` services down, `revive-host`, `revive-vm`, `revive-services` bring one
+    host, one vm-host or `count` services back up. Only in a stopped simulation."""
+    monitor = _simulating(request)
+    if monitor.simulation_running:
+        raise HTTPException(status_code=409, detail="stop the simulation first")
+    monitor.act_on_simulation(action, count)
+    return await info(request)
 
 
 @router.get("/endpoints")
