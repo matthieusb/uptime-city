@@ -4,6 +4,106 @@
  */
 
 export interface paths {
+  '/api/v1/info': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Info */
+    get: operations['info_api_v1_info_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/simulation/refresh': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Refresh Simulation
+     * @description Redraws the simulated statuses now. Only in simulation.
+     */
+    post: operations['refresh_simulation_api_v1_simulation_refresh_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/simulation/start': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Start Simulation
+     * @description Redraws the simulated statuses every period from now on. Only in simulation.
+     */
+    post: operations['start_simulation_api_v1_simulation_start_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/simulation/stop': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Stop Simulation
+     * @description Stops redrawing the simulated statuses by themselves. Only in simulation.
+     */
+    post: operations['stop_simulation_api_v1_simulation_stop_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/simulation/actions/{action}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Simulation Action
+     * @description Changes the simulated statuses by hand, instead of what would happen at random: `reset`
+     *     brings everything up, `nuke-host`, `demolish-vm`, `down-services` take a physical host, a
+     *     vm-host or `count` services down, `revive-host`, `revive-vm`, `revive-services` bring one
+     *     host, one vm-host or `count` services back up. Only in a stopped simulation.
+     */
+    post: operations['simulation_action_api_v1_simulation_actions__action__post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/endpoints': {
     parameters: {
       query?: never
@@ -84,6 +184,17 @@ export interface components {
       /** Detail */
       detail?: components['schemas']['ValidationError'][]
     }
+    /** Info */
+    Info: {
+      /** Lab Name */
+      lab_name: string
+      /** Simulation */
+      simulation: boolean
+      /** Simulation Running */
+      simulation_running: boolean
+      /** Next Refresh In S */
+      next_refresh_in_s: number | null
+    }
     /** ProbeResult */
     ProbeResult: {
       /**
@@ -125,6 +236,126 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  info_api_v1_info_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Info']
+        }
+      }
+    }
+  }
+  refresh_simulation_api_v1_simulation_refresh_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Info']
+        }
+      }
+    }
+  }
+  start_simulation_api_v1_simulation_start_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Info']
+        }
+      }
+    }
+  }
+  stop_simulation_api_v1_simulation_stop_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Info']
+        }
+      }
+    }
+  }
+  simulation_action_api_v1_simulation_actions__action__post: {
+    parameters: {
+      query?: {
+        count?: number
+      }
+      header?: never
+      path: {
+        action:
+          | 'reset'
+          | 'nuke-host'
+          | 'demolish-vm'
+          | 'down-services'
+          | 'revive-host'
+          | 'revive-vm'
+          | 'revive-services'
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Info']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
   list_endpoints_api_v1_endpoints_get: {
     parameters: {
       query?: never

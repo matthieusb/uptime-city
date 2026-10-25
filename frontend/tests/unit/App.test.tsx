@@ -1,18 +1,36 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQueries,
+} from '@tanstack/react-query'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import App from '../../src/App'
+import { historyQuery } from '../../src/api/queries'
+import type { EndpointInfo } from '../../src/api/client'
 
 // jsdom has no WebGL: the 3D city is replaced by a stub listing its buildings.
+// Like the city, it loads the history of every endpoint.
 vi.mock('../../src/city/CityView', () => ({
-  default: ({ endpoints }: { endpoints: { id: string }[] }) => (
-    <div data-testid="city-view">
-      {endpoints.map((e) => (
-        <span key={e.id} data-testid="city-building" />
-      ))}
-    </div>
-  ),
+  default: function CityStub({
+    endpoints,
+    refreshMenu,
+  }: {
+    endpoints: EndpointInfo[]
+    refreshMenu: ReactNode
+  }) {
+    useQueries({ queries: endpoints.map(historyQuery) })
+    return (
+      <div data-testid="city-view">
+        {refreshMenu}
+        {endpoints.map((e) => (
+          <span key={e.id} data-testid="city-building" />
+        ))}
+      </div>
+    )
+  },
 }))
 
 const endpoint = {
@@ -22,33 +40,6 @@ const endpoint = {
   interval_s: 30,
   host_id: null,
   kind: 'physical' as const,
-  parent_id: null,
-}
-const service = {
-  id: 'macro-server1-ssh',
-  name: 'ssh',
-  hostname: 'macro-server1',
-  interval_s: 30,
-  host_id: 'macro-server1',
-  kind: 'service' as const,
-  parent_id: null,
-}
-const vmHost = {
-  id: 'monitoring-vm',
-  name: 'monitoring-vm',
-  hostname: 'monitoring-vm',
-  interval_s: 30,
-  host_id: null,
-  kind: 'vm' as const,
-  parent_id: 'macro-server1',
-}
-const vmService = {
-  id: 'monitoring-vm-web',
-  name: 'web',
-  hostname: 'monitoring-vm',
-  interval_s: 30,
-  host_id: 'monitoring-vm',
-  kind: 'service' as const,
   parent_id: null,
 }
 const results = [
@@ -67,157 +58,206 @@ const results = [
     host_down: false,
   },
 ]
-const hostDownResults = [
-  {
-    ts: '2026-01-01T00:00:30Z',
-    success: false,
-    latency_ms: null,
-    error: 'host is down',
-    host_down: true,
-  },
-]
-
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
 })
 
-// The app opens on the 3D tab: `tab` is the one to open first, or null to stay on it.
 async function renderApp(
-  endpoints: (typeof endpoint | typeof service | typeof vmHost)[] = [endpoint],
+  endpoints: (typeof endpoint)[] = [endpoint],
   historyOf: (url: string) => unknown[] = () => results,
-  tab: '2D' | '3D' | null = '2D',
+  simulation = false,
+  nextRefreshInS = 42,
+  running = false,
 ) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) =>
-      Response.json(url.endsWith('/endpoints') ? endpoints : historyOf(url)),
-    ),
+    vi.fn(async (url: string) => {
+      if (url.endsWith('/info'))
+        return Response.json({
+          simulation,
+          simulation_running: simulation && running,
+          next_refresh_in_s: simulation ? nextRefreshInS : null,
+        })
+      return Response.json(
+        url.endsWith('/endpoints') ? endpoints : historyOf(url),
+      )
+    }),
   )
   render(
     <QueryClientProvider client={new QueryClient()}>
       <App />
     </QueryClientProvider>,
   )
-  if (tab) await userEvent.click(await screen.findByRole('tab', { name: tab }))
 }
 
-it('shows one bar per check, green when ok and red on error', async () => {
-  await renderApp()
+it('shows a simulation badge at the bottom left only when the backend simulates', async () => {
+  await renderApp([endpoint], () => results, true)
 
-  expect(await screen.findByText('macro-server1')).toBeTruthy()
-  const bars = await screen.findAllByTestId('check-bar')
-  expect(bars).toHaveLength(2)
-  expect(bars[0].style.backgroundColor).toBe('rgb(46, 204, 113)')
-  expect(bars[1].style.backgroundColor).toBe('rgb(231, 76, 60)')
+  const badge = await screen.findByText(/simulation/i)
+  expect(badge.closest('.simulation-badge')).toBeTruthy()
+  expect((await screen.findByTestId('refresh-counter')).textContent).toBe('42s')
+  cleanup()
+
+  await renderApp([endpoint], () => results, false)
+  await screen.findByTestId('city-view')
+  expect(screen.queryByText(/simulation/i)).toBeNull()
+  expect(screen.queryByTestId('refresh-counter')).toBeNull()
 })
 
-it('opens on the 3D tab, without the cards', async () => {
-  await renderApp([endpoint], () => results, null)
-
+it('shows the simulation counter stopped at first, with a start badge at its top right', async () => {
+  await renderApp([endpoint], () => results, true)
+  const counter = await screen.findByRole('button', {
+    name: /start the simulation/i,
+  })
+  expect(counter.contains(screen.getByTestId('refresh-counter'))).toBe(true)
+  expect(screen.getByTestId('refresh-counter').textContent).toBe('42s')
+  const badge = screen.getByTestId('simulation-toggle-badge')
+  expect(counter.contains(badge)).toBe(true)
+  expect(badge.textContent).toBe('▶')
   expect(
-    screen.getByRole('tab', { name: '3D' }).getAttribute('aria-selected'),
-  ).toBe('true')
-  expect(await screen.findByTestId('city-view')).toBeTruthy()
-  expect(await screen.findAllByTestId('city-building')).toHaveLength(1)
-  expect(screen.queryByTestId('card-row')).toBeNull()
+    screen.queryByRole('button', { name: /stop the simulation/i }),
+  ).toBeNull()
 })
 
-it('shows the cards alone in the 2D tab, without loading the city', async () => {
-  await renderApp()
+it('starts the simulation when its stopped counter is clicked', async () => {
+  await renderApp([endpoint], () => results, true)
+  const calls = () => vi.mocked(fetch).mock.calls
+  const infos = calls().filter(([url]) => String(url).endsWith('/info')).length
 
-  expect(await screen.findByTestId('card-row')).toBeTruthy()
-  expect(
-    screen.getByRole('tab', { name: '2D' }).getAttribute('aria-selected'),
-  ).toBe('true')
-  expect(screen.queryByTestId('city-view')).toBeNull()
-})
-
-it('goes back to the city from the 2D tab', async () => {
-  await renderApp()
-  await screen.findByTestId('card-row')
-
-  await userEvent.click(screen.getByRole('tab', { name: '3D' }))
-
-  expect(await screen.findByTestId('city-view')).toBeTruthy()
-  expect(screen.queryByTestId('card-row')).toBeNull()
-})
-
-it('nests the service cards inside their host card', async () => {
-  await renderApp([endpoint, service])
-
-  const hostCard = await screen.findByTestId('host-card')
-  expect(
-    hostCard.querySelectorAll('[data-testid="service-card"]'),
-  ).toHaveLength(1)
-  expect(within(hostCard).getByText('ssh')).toBeTruthy()
-})
-
-it('shows the host as a header, not as a nested card', async () => {
-  await renderApp([endpoint, service])
-
-  const hostCard = await screen.findByTestId('host-card')
-  const header = within(hostCard).getByTestId('host-header')
-  expect(within(header).getByText('macro-server1')).toBeTruthy()
-  expect(await within(header).findAllByTestId('check-bar')).toHaveLength(2)
-  expect((await within(header).findByTestId('status')).textContent).toBe('down')
-  // Only the service is a card.
-  expect(hostCard.querySelectorAll('.card')).toHaveLength(1)
-  expect(within(hostCard).getAllByTestId('service-card')).toHaveLength(1)
-  expect(within(hostCard).getByTestId('host-separator')).toBeTruthy()
-})
-
-it('shows a host without services as a header and a separator', async () => {
-  await renderApp()
-
-  const hostCard = await screen.findByTestId('host-card')
-  expect(within(hostCard).getByTestId('host-header')).toBeTruthy()
-  expect(hostCard.querySelectorAll('.card')).toHaveLength(0)
-  expect(within(hostCard).getByTestId('host-separator')).toBeTruthy()
-  expect(within(hostCard).queryAllByTestId('service-card')).toHaveLength(0)
-})
-
-it('badges a service as host down when its host is down', async () => {
-  await renderApp([endpoint, service], (url) =>
-    url.includes('-ssh') ? hostDownResults : results,
+  await userEvent.click(
+    await screen.findByRole('button', { name: /start the simulation/i }),
   )
 
-  const card = await screen.findByTestId('service-card')
-  expect(await within(card).findByText('host down')).toBeTruthy()
-  expect(within(card).queryByTestId('status')).toBeNull()
+  await waitFor(() => {
+    expect(
+      calls().some(
+        ([url, init]) =>
+          String(url).endsWith('/simulation/start') && init?.method === 'POST',
+      ),
+    ).toBe(true)
+    expect(
+      calls().filter(([url]) => String(url).endsWith('/info')).length,
+    ).toBeGreaterThan(infos)
+  })
 })
 
-it('shows no host-down badge on a plain failure', async () => {
-  await renderApp([endpoint, service])
+it('shows a stop badge on a running counter, and stops it when clicked', async () => {
+  await renderApp([endpoint], () => results, true, 42, true)
+  const counter = await screen.findByRole('button', {
+    name: /stop the simulation/i,
+  })
+  expect(screen.getByTestId('simulation-toggle-badge').textContent).toBe('■')
+  expect(screen.getByTestId('refresh-counter').textContent).toMatch(
+    /^(42|41)s$/,
+  )
 
-  const card = await screen.findByTestId('service-card')
-  expect(await within(card).findByTestId('average-latency')).toBeTruthy()
-  expect(within(card).queryByTestId('status')).toBeNull()
-  expect(within(card).queryByText('host down')).toBeNull()
+  await userEvent.click(counter)
+
+  await waitFor(() => {
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.some(
+          ([url, init]) =>
+            String(url).endsWith('/simulation/stop') && init?.method === 'POST',
+        ),
+    ).toBe(true)
+  })
 })
 
-it('marks a physical host with a badge', async () => {
-  await renderApp([endpoint, service])
+it('has a round button next to the simulation timer that redraws the statuses and reloads the data', async () => {
+  await renderApp([endpoint], () => results, true)
+  const button = await screen.findByRole('button', {
+    name: /refresh the simulation/i,
+  })
+  expect(button.classList.contains('simulation-badge')).toBe(true)
+  const calls = () => vi.mocked(fetch).mock.calls
+  const count = (end: string) =>
+    calls().filter(([url]) => String(url).endsWith(end)).length
+  const infos = count('/info')
+  const histories = count('/history?limit=50')
 
-  const header = await screen.findByTestId('host-header')
-  expect(within(header).getByTestId('kind-badge').textContent).toBe('physical')
+  await userEvent.click(button)
+
+  await waitFor(() => {
+    expect(
+      calls().some(
+        ([url, init]) =>
+          String(url).endsWith('/simulation/refresh') &&
+          init?.method === 'POST',
+      ),
+    ).toBe(true)
+    expect(count('/info')).toBeGreaterThan(infos)
+    expect(count('/history?limit=50')).toBeGreaterThan(histories)
+  })
 })
 
-it('nests a vm-host card in its physical host, above the physical host services', async () => {
-  await renderApp([endpoint, service, vmHost, vmService])
-
-  const physical = await screen.findByTestId('host-card')
-  const vm = await within(physical).findByTestId('vm-host-card')
+it('has no refresh button when the backend does not simulate', async () => {
+  await renderApp([endpoint], () => results, false)
+  await screen.findByTestId('city-view')
   expect(
-    within(within(vm).getByTestId('host-header')).getByTestId('kind-badge')
-      .textContent,
-  ).toBe('VM')
-  // The vm-host's service is in the vm-host card, not in the physical one.
-  expect(within(vm).getByText('web')).toBeTruthy()
-  expect(within(vm).queryByText('ssh')).toBeNull()
-  const ssh = within(physical).getByText('ssh')
-  expect(
-    vm.compareDocumentPosition(ssh) & Node.DOCUMENT_POSITION_FOLLOWING,
-  ).toBeTruthy()
-  expect(screen.getAllByTestId('host-card')).toHaveLength(1)
+    screen.queryByRole('button', { name: /refresh the simulation/i }),
+  ).toBeNull()
+})
+
+it('gives the 3D view a refresh selector in the style of its menus, with the sync in simulation', async () => {
+  await renderApp([endpoint], () => results, true)
+
+  const selector = await screen.findByRole('combobox', { name: 'Refresh' })
+  expect(selector.closest('.city-legend')).toBeTruthy()
+  expect(await screen.findByText('Sync with simulation')).toBeTruthy()
+})
+
+it('syncs the refresh with the simulation by default, and keeps the choice made', async () => {
+  await renderApp([endpoint], () => results, true)
+
+  const selector = (await screen.findByRole('combobox', {
+    name: 'Refresh',
+  })) as HTMLSelectElement
+  await waitFor(() => expect(selector.value).toBe('sync'))
+
+  await userEvent.selectOptions(selector, '10s')
+  expect(selector.value).toBe('10s')
+})
+
+it('restores the refresh picked in an earlier visit', async () => {
+  await renderApp([endpoint], () => results, false)
+  const first = (await screen.findByRole('combobox', {
+    name: 'Refresh',
+  })) as HTMLSelectElement
+  await userEvent.selectOptions(first, '5m')
+  cleanup()
+
+  await renderApp([endpoint], () => results, false)
+  const second = (await screen.findByRole('combobox', {
+    name: 'Refresh',
+  })) as HTMLSelectElement
+  expect(second.value).toBe('5m')
+})
+
+it('ignores a stored sync with the simulation when the backend does not simulate', async () => {
+  localStorage.setItem('uptime-city:refresh', JSON.stringify('sync'))
+  await renderApp([endpoint], () => results, false)
+
+  const selector = (await screen.findByRole('combobox', {
+    name: 'Refresh',
+  })) as HTMLSelectElement
+  expect(selector.value).toBe('30s')
+})
+
+it('refreshes every 30s by default when the backend does not simulate', async () => {
+  await renderApp([endpoint], () => results, false)
+
+  const selector = (await screen.findByRole('combobox', {
+    name: 'Refresh',
+  })) as HTMLSelectElement
+  expect(selector.value).toBe('30s')
+})
+
+it('shows the city, with one building per endpoint', async () => {
+  await renderApp()
+
+  expect(await screen.findByTestId('city-view')).toBeTruthy()
+  expect(await screen.findAllByTestId('city-building')).toHaveLength(1)
 })

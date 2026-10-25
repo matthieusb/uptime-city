@@ -27,7 +27,7 @@ uv run pyright           # type check (strict)
 uv run uptime-city --config example/config.yaml
 ```
 
-`--config` is the monitoring config file (default: `config.yaml` in the current directory). The API listens on http://127.0.0.1:8000 (health check: `/api/v1/health`, OpenAPI spec: `/openapi.json`, docs: `/docs`). The last 50 results are kept in memory (history is lost on restart).
+`--config` is the monitoring config file (default: `config.yaml` in the current directory). `--simulate` (`-s`) probes nothing and fakes statuses instead, with consistent outages (a down host takes its vm-hosts and services down), redrawn every 30 seconds. The API listens on http://127.0.0.1:8000 (health check: `/api/v1/health`, OpenAPI spec: `/openapi.json`, docs: `/docs`). The last 50 results are kept in memory (history is lost on restart).
 
 ## Test with your own configuration
 
@@ -37,9 +37,10 @@ uv run uptime-city --config example/config.yaml
 cp example/config.example.yaml example/config.yaml
 ```
 
-Then edit `example/config.yaml`. A config is a list of physical `hosts`. A physical host has its own check, and contains `services` and `vm-hosts`. A vm-host has its own check and contains `services` only:
+Then edit `example/config.yaml`. A config is an optional `lab-name` and a list of physical `hosts`. A physical host has its own check, and contains `services` and `vm-hosts`. A vm-host has its own check and contains `services` only:
 
 ```yaml
+lab-name: home-lab                          # optional: the name shown over the 3D map (default: lab-map)
 hosts:
   - name: web-server                        # a host, shown as a building and a host card
     url: "icmp://web-server.example.org"    # its own check: icmp://, tcp://host:port or http(s)://
@@ -60,6 +61,7 @@ hosts:
             conditions: ["[STATUS] == 200"]
 ```
 
+- `lab-name` is the title shown over the 3D map, left of the service counts. It is optional (default `lab-map`) and cannot be empty.
 - A host with no `services` is a building with a single floor.
 - A vm-host cannot contain other hosts.
 - Every `http(s)://` check, host or service, must state its expected status with a `[STATUS]` condition such as `[STATUS] == 200`. Without it the config is invalid and the backend does not start.

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { BIOMES } from '../../src/city/biomes'
 import {
+  BUILDING_WIDTH,
+  MAX_BUILDING_WIDTH,
+  buildingWidth,
   buildingHeight,
   carPoint,
   cityLayout,
@@ -7,7 +11,6 @@ import {
   floorHeight,
   FLOOR_HEIGHT,
   GROUND_HEIGHT,
-  HALF_SCREEN_WIDTH,
   roadZ,
   serviceLabelSides,
   type CityLayout,
@@ -28,12 +31,13 @@ function hides(
   object: { x: number; z: number; height: number; radius: number },
   lot: Lot,
 ) {
+  const half = lot.width / Math.SQRT2
   const sideways = Math.abs(object.x - object.z - (lot.x - lot.z)) / Math.SQRT2
   const inFront = (object.x + object.z - (lot.x + lot.z)) / Math.SQRT2
   return (
-    sideways < HALF_SCREEN_WIDTH + object.radius &&
+    sideways < half + object.radius &&
     inFront > -object.radius &&
-    inFront < object.height * Math.sqrt(3) + HALF_SCREEN_WIDTH + object.radius
+    inFront < object.height * Math.sqrt(3) + half + object.radius
   )
 }
 
@@ -94,12 +98,11 @@ describe('cityLayout', () => {
           // hides what is behind it.
           const sideways = Math.abs(a.x - b.x - (a.z - b.z)) / Math.SQRT2
           const depth = (a.x - b.x + (a.z - b.z)) / Math.SQRT2
-          const reach = a.height * Math.sqrt(3) + 2 * HALF_SCREEN_WIDTH
-          expect(
-            sideways >= 2 * HALF_SCREEN_WIDTH + 1 ||
-              depth <= 0 ||
-              depth >= reach,
-          ).toBe(true)
+          const halves = (a.width + b.width) / Math.SQRT2
+          const reach = a.height * Math.sqrt(3) + halves
+          expect(sideways >= halves + 1 || depth <= 0 || depth >= reach).toBe(
+            true,
+          )
         }
       }
     },
@@ -135,14 +138,14 @@ describe('cityLayout', () => {
   it('lines the buildings along a road, on paved lots', () => {
     const layout = cityLayout(ids(13))
     const tileAt = tileMap(layout)
-    expect(layout.roads.length).toBe(2)
+    expect(layout.roads.length).toBe(3)
     for (const lot of layout.lots) {
       const distances = layout.roads.map((r) =>
         Math.abs(lot.z - roadZ(r, lot.x)),
       )
       const nearest = Math.min(...distances)
       expect(nearest).toBeGreaterThan(2.5)
-      expect(nearest).toBeLessThan(4)
+      expect(nearest).toBeLessThan(lot.width / 2 + 2.5)
       for (const [dx, dz] of [
         [0, 0],
         [0.9, 0.9],
@@ -155,8 +158,8 @@ describe('cityLayout', () => {
     }
   })
 
-  it('has the sea and a beach in front, and hills behind the town', () => {
-    const layout = cityLayout(ids(7))
+  it('has the sea and a beach in front of a coastal town, and hills behind', () => {
+    const layout = cityLayout(ids(7), { main: 'coastal' })
     const zs = layout.lots.map((l) => l.z)
     const kinds = (kind: Tile['kind']) =>
       layout.tiles.filter((t) => t.kind === kind)
@@ -174,7 +177,7 @@ describe('cityLayout', () => {
   })
 
   it('mixes parks of several kinds, shapes and sizes', () => {
-    const layout = cityLayout(ids(7))
+    const layout = cityLayout(ids(7), { main: 'coastal' })
     expect(
       new Set(layout.patches.map((p) => p.kind)).size,
     ).toBeGreaterThanOrEqual(3)
@@ -193,7 +196,9 @@ describe('cityLayout', () => {
     const tileAt = tileMap(layout)
     expect(layout.trees.length).toBeGreaterThan(0)
     for (const tree of layout.trees) {
-      expect(['grass', 'hill', 'sand']).toContain(tileAt(tree.x, tree.z)?.kind)
+      expect(['grass', 'hill', 'sand', 'snow']).toContain(
+        tileAt(tree.x, tree.z)?.kind,
+      )
       expect(Math.abs(tree.x)).toBeLessThanOrEqual(layout.halfWidth)
       expect(Math.abs(tree.z)).toBeLessThanOrEqual(layout.halfDepth)
     }
@@ -208,7 +213,7 @@ describe('cityLayout', () => {
   })
 })
 
-describe('decoration and themes', () => {
+describe('decoration and biomes', () => {
   const town = [
     { id: 'a', services: 2 },
     { id: 'a:decor-0', services: 0, decor: 'supermarket' as const },
@@ -237,58 +242,36 @@ describe('decoration and themes', () => {
         if (a === b) continue
         const sideways = Math.abs(a.x - b.x - (a.z - b.z)) / Math.SQRT2
         const depth = (a.x - b.x + (a.z - b.z)) / Math.SQRT2
-        const reach = a.height * Math.sqrt(3) + 2 * HALF_SCREEN_WIDTH
-        expect(
-          sideways >= 2 * HALF_SCREEN_WIDTH + 1 || depth <= 0 || depth >= reach,
-        ).toBe(true)
+        const halves = (a.width + b.width) / Math.SQRT2
+        const reach = a.height * Math.sqrt(3) + halves
+        expect(sideways >= halves + 1 || depth <= 0 || depth >= reach).toBe(
+          true,
+        )
       }
     }
   })
 
   it('keeps the ground compact', () => {
-    for (const theme of ['coastal', 'meadow', 'desert', 'snow'] as const) {
-      const layout = cityLayout(town, theme)
+    for (const main of BIOMES) {
+      const layout = cityLayout(town, { main })
       expect(layout.halfDepth).toBeLessThanOrEqual(15)
       expect(layout.tiles.length).toBeLessThanOrEqual(1100)
     }
   })
 
   it('has few trees and ponds besides the monitored buildings', () => {
-    for (const theme of ['coastal', 'meadow', 'desert', 'snow'] as const) {
-      const layout = cityLayout(town, theme)
+    for (const main of BIOMES) {
+      const layout = cityLayout(town, { main })
       const ponds = layout.tiles.filter((t) => t.kind === 'pond')
       expect(ponds.length / layout.tiles.length).toBeLessThan(0.05)
       expect(layout.trees.length / layout.tiles.length).toBeLessThan(0.17)
     }
   })
 
-  it('is coastal by default', () => {
-    expect(cityLayout(town).theme).toBe('coastal')
-  })
-
-  it.each(['meadow', 'desert', 'snow'] as const)(
-    'has no sea, pier or boats in a %s town',
-    (theme) => {
-      const layout = cityLayout(town, theme)
-      expect(layout.theme).toBe(theme)
-      expect(
-        layout.tiles.filter((t) => t.kind === 'water' || t.kind === 'shallow'),
-      ).toEqual([])
-      expect(layout.pier).toEqual([])
-      expect(layout.boats).toEqual([])
-      expect(layout.umbrellas).toEqual([])
-    },
-  )
-
-  it('grows only pines in the snow and only palms in the desert', () => {
-    const kinds = (theme: 'snow' | 'desert') =>
-      new Set(cityLayout(town, theme).trees.map((t) => t.kind))
-    expect([...kinds('snow')]).toEqual(['pine'])
-    expect([...kinds('desert')]).toEqual(['palm'])
-  })
-
   it('looks the same on every call', () => {
-    expect(cityLayout(town, 'snow')).toEqual(cityLayout(town, 'snow'))
+    expect(cityLayout(town, { main: 'mountain' })).toEqual(
+      cityLayout(town, { main: 'mountain' }),
+    )
   })
 })
 
@@ -328,6 +311,7 @@ describe('serviceLabelSides', () => {
     z: (-column * Math.SQRT2) / 2,
     floors,
     height: buildingHeight(floors),
+    width: BUILDING_WIDTH,
   })
 
   it('puts the labels on the right of a lone building', () => {
@@ -352,5 +336,28 @@ describe('serviceLabelSides', () => {
     expect(serviceLabelSides([lot('a', 0, 4), lot('b', 60, 6)]).get('a')).toBe(
       'right',
     )
+  })
+})
+
+describe('building width', () => {
+  it('grows with the number of services, up to a maximum', () => {
+    expect(buildingWidth(0)).toBe(BUILDING_WIDTH)
+    expect(buildingWidth(3)).toBeGreaterThan(buildingWidth(1))
+    expect(buildingWidth(50)).toBe(MAX_BUILDING_WIDTH)
+  })
+
+  it('gains more every 5 services', () => {
+    const step = buildingWidth(5) - buildingWidth(4)
+    expect(step).toBeGreaterThan(buildingWidth(4) - buildingWidth(3))
+    expect(buildingWidth(10) - buildingWidth(9)).toBeCloseTo(step)
+  })
+
+  it('gives each lot the width of its services', () => {
+    const { lots } = cityLayout([
+      { id: 'a', services: 0 },
+      { id: 'b', services: 4 },
+    ])
+    expect(lots[1].width).toBeGreaterThan(lots[0].width)
+    expect(lots[0].width).toBe(BUILDING_WIDTH)
   })
 })

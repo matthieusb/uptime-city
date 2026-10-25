@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BADGE_BREATH_MIN,
+  BADGE_BREATH_S,
+  badgeBreath,
   buildingGlow,
   buildingState,
   floorStatus,
@@ -141,5 +144,14 @@ describe('nukedState', () => {
       floors: ['down', 'down', 'down'],
       burning: [false, false, false],
     })
+  })
+})
+
+describe('badgeBreath', () => {
+  it('only dims the badge a little, with the period of the green glow', () => {
+    const samples = Array.from({ length: 400 }, (_, i) => badgeBreath(i / 100))
+    expect(Math.min(...samples)).toBeCloseTo(BADGE_BREATH_MIN, 2)
+    expect(Math.max(...samples)).toBeCloseTo(1, 2)
+    expect(badgeBreath(0)).toBeCloseTo(badgeBreath(BADGE_BREATH_S), 6)
   })
 })

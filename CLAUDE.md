@@ -16,7 +16,7 @@ frontend/       # Vite + React + TypeScript -> frontend/CLAUDE.md (three.js / R3
 ```
 
 - The backend probes the services, stores the results and exposes them.
-- The frontend only displays results. It never sends commands to the backend.
+- The frontend only displays results. It never sends commands to the backend, with one explicit exception: in simulation mode, the simulation is stopped at first, a click on its counter starts or stops its redrawing (`POST /api/v1/simulation/start` and `/stop`) a button redraws the simulated statuses at once (`POST /api/v1/simulation/refresh`) and, while it is stopped, buttons make by hand the events that would happen by themselves (`POST /api/v1/simulation/actions/{action}`), all of them answering 404 otherwise.
 - docker-compose comes later.
 
 ## Frontend ↔ backend communication
@@ -36,6 +36,9 @@ GET /api/v1/endpoints                → endpoint definitions
 GET /api/v1/status                   → snapshot {seq, endpoints:[{id, status, last_check_at, latency_ms, uptime_24h}]}
 GET /api/v1/endpoints/{id}/history   → past results (since, limit)
 GET /api/v1/events  (text/event-stream)
+POST /api/v1/simulation/refresh      → redraws the simulated statuses now (simulation only)
+POST /api/v1/simulation/start|stop   → starts or stops their redrawing every period (simulation only)
+POST /api/v1/simulation/actions/{action}[?count=n] → one event by hand: reset, nuke-host, demolish-vm, down-services, revive-host, revive-vm, revive-services (stopped simulation only)
 ```
 
 ### SSE events

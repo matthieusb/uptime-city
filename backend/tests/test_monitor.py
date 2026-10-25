@@ -1,7 +1,7 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 
-from uptime_city.config.models import Config, PhysicalHost, Service
+from uptime_city.config.models import ClientConfig, Config, PhysicalHost, Service
 from uptime_city.monitor.scheduler import Monitor
 from uptime_city.probes.base import ProbeResult
 
@@ -92,3 +92,37 @@ async def test_monitor_skips_services_when_host_is_down() -> None:
     last = monitor.history("srv-app")[-1]
     assert last.success is False
     assert last.host_down is True
+
+
+async def test_monitor_gives_each_probe_the_timeout_of_its_endpoint() -> None:
+    timeouts: dict[str, float] = {}
+
+    async def probe(hostname: str, timeout: float) -> ProbeResult:
+        timeouts[hostname] = timeout
+        return ProbeResult(ts=datetime.now(UTC), success=True, latency_ms=1.0)
+
+    config = Config(
+        hosts=[
+            PhysicalHost(
+                name="srv",
+                url="icmp://srv",
+                interval=TICK,
+                services=[
+                    Service(
+                        name="app",
+                        url="icmp://app",
+                        interval=TICK,
+                        client=ClientConfig(timeout=timedelta(seconds=12)),
+                    ),
+                    Service(name="other", url="icmp://other", interval=TICK),
+                ],
+            )
+        ]
+    )
+    monitor = Monitor(config, probe)
+    task = asyncio.create_task(monitor.run())
+    while len(timeouts) < 3:
+        await asyncio.sleep(0.01)
+    task.cancel()
+
+    assert timeouts == {"srv": 30, "app": 12, "other": 30}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { HALF_SCREEN_WIDTH } from '../../src/city/layout'
 import {
   nukedLayout,
+  sizeScore,
   worldFrame,
   worldLayout,
   type NeighbourhoodSpec,
@@ -15,6 +15,19 @@ const spec = (id: string, ...vms: number[]): NeighbourhoodSpec => ({
     ...vms.map((services, i) => ({ id: `${id}-vm${i}`, services })),
   ],
 })
+
+// A homelab: from a lone host to one with many vm-hosts, as hosts can differ a lot.
+const homelab = [
+  spec('macro1', 5, 6, 4, 4),
+  spec('macro3', 1),
+  spec('msi', 9, 9, 9),
+  spec('nas', 6, 6, 6, 6, 6, 6, 6, 6),
+  spec('pi3'),
+  spec('pi5'),
+  spec('zima1'),
+  spec('zima2'),
+  spec('zima3'),
+]
 
 const hosts = [spec('a', 3), spec('b'), spec('c'), spec('d'), spec('e', 3, 18)]
 
@@ -45,19 +58,9 @@ describe('worldLayout', () => {
     }
   })
 
-  it('gives neighbouring neighbourhoods different themes', () => {
-    const themes = worldLayout(hosts).neighbourhoods.map((n) => n.layout.theme)
-    expect(themes[0]).toBe('coastal')
-    expect(new Set(themes).size).toBeGreaterThanOrEqual(3)
-    for (let i = 1; i < themes.length; i++) {
-      expect(themes[i]).not.toBe(themes[i - 1])
-    }
-  })
-
   it('puts the neighbourhoods side by side on one ground, without a gap', () => {
-    const world = worldLayout(hosts)
-    const plates = [...world.neighbourhoods, ...world.wilds]
-    expect(plates.length).toBe(6)
+    const { neighbourhoods: plates } = worldLayout(hosts)
+    expect(plates.length).toBe(5)
     for (const a of plates) {
       // Every plate touches another one, to the side or above.
       const touching = plates.filter((b) => {
@@ -68,61 +71,105 @@ describe('worldLayout', () => {
         const depth = a.layout.halfDepth + b.layout.halfDepth
         return (
           (Math.abs(dx - width) < 1e-6 && dz < 1e-6) ||
-          (Math.abs(dz - depth) < 1e-6 && dx < 1e-6)
+          (Math.abs(dz - depth) < 1e-6 &&
+            dx < a.layout.halfWidth + b.layout.halfWidth)
         )
       })
       expect(touching.length).toBeGreaterThan(0)
     }
   })
 
-  it('gives every plate the same size', () => {
-    const plates = (w = worldLayout(hosts)) => [...w.neighbourhoods, ...w.wilds]
-    expect(new Set(plates().map((p) => p.layout.halfWidth)).size).toBe(1)
-    expect(new Set(plates().map((p) => p.layout.halfDepth)).size).toBe(1)
+  it('makes a neighbourhood smaller when its host has fewer services and vms', () => {
+    const [small] = worldLayout([spec('small')]).neighbourhoods
+    const [big] = worldLayout([spec('big', 3, 4, 5, 6, 7, 8, 9)]).neighbourhoods
+    expect(small.layout.halfWidth).toBeLessThan(big.layout.halfWidth)
   })
 
-  it('fills the free cells of the grid with wilderness, without buildings', () => {
-    const { wilds } = worldLayout(hosts)
-    expect(wilds.length).toBe(1)
-    expect(wilds[0].layout.lots).toEqual([])
-  })
-
-  it('links the plates of a row with a straight road', () => {
-    const { neighbourhoods } = worldLayout(hosts)
-    const [a, b] = neighbourhoods
-    expect(a.z).toBe(b.z)
-    // Two tile rows are roads right to the edge of both plates, at the same
-    // place along Z.
-    const row = Math.ceil(a.layout.roads[0].z - 1)
-    const edge = Math.round(a.layout.halfWidth - 0.5)
-    const kind = (n: typeof a, x: number, z: number) =>
-      n.layout.tiles.find((t) => t.x === x && t.z === z)?.kind
-    expect(b.layout.roads[0].z).toBe(a.layout.roads[0].z)
-    for (const z of [row, row + 1]) {
-      expect(kind(a, edge, z)).toBe('road')
-      expect(kind(b, -edge, z)).toBe('road')
+  it('gives every neighbourhood its own area, bigger with a bigger size score', () => {
+    const world = worldLayout(homelab)
+    const area = (id: string) => {
+      const l = world.neighbourhoods.find((n) => n.id === id)!.layout
+      return 4 * l.halfWidth * l.halfDepth
+    }
+    const byScore = homelab
+      .map((h) => ({ id: h.id, score: sizeScore(h.buildings) }))
+      .sort((p, q) => p.score - q.score)
+    for (let i = 1; i < byScore.length; i++) {
+      if (byScore[i].score > byScore[i - 1].score) {
+        expect(area(byScore[i].id)).toBeGreaterThan(area(byScore[i - 1].id))
+      }
     }
   })
 
-  it('links the rows with a road along the edge of the plates', () => {
-    const { neighbourhoods } = worldLayout(hosts)
-    // Two plates, one above the other, in the same column.
-    const top = neighbourhoods[0]
-    const below = neighbourhoods.find((n) => n.x === top.x && n.z > top.z)!
-    const column = Math.round(-top.layout.halfWidth + 0.5) + 2
-    const roadsAt = (n: (typeof neighbourhoods)[number]) =>
-      n.layout.tiles
-        .filter((t) => t.x === column && t.kind === 'road')
-        .map((t) => t.z + n.z)
-    const joined = [...roadsAt(top), ...roadsAt(below)].sort((p, q) => p - q)
-    // One unbroken line of tiles from the first road to the second one.
-    const span = joined[joined.length - 1] - joined[0]
-    expect(joined.length).toBeGreaterThan(top.layout.halfDepth)
-    expect(new Set(joined).size).toBe(joined.length)
-    expect(span).toBeGreaterThanOrEqual(joined.length - 1)
-    for (let i = 1; i < joined.length; i++) {
-      expect(joined[i] - joined[i - 1]).toBeLessThanOrEqual(1 + 1e-9)
+  it('does not stretch a small neighbourhood to the size of the others', () => {
+    const world = worldLayout([
+      spec('big', 3, 4, 5, 6, 7, 8, 9, 6, 6),
+      spec('small'),
+    ])
+    const [big, small] = world.neighbourhoods
+    expect(small.layout.halfWidth * small.layout.halfDepth).toBeLessThan(
+      (big.layout.halfWidth * big.layout.halfDepth) / 2,
+    )
+  })
+
+  it('joins the neighbourhoods with wild tiles, none for a lone neighbourhood', () => {
+    expect(worldLayout([spec('a', 3)]).wilds).toEqual([])
+    const { wilds, neighbourhoods } = worldLayout(homelab)
+    expect(wilds.length).toBeGreaterThan(0)
+    for (const w of wilds) {
+      expect(w.layout.lots).toEqual([])
+      expect(neighbourhoods.map((n) => n.id)).not.toContain(w.id)
     }
+  })
+
+  it('does not overlap any ground', () => {
+    const world = worldLayout(homelab)
+    const keys: string[] = []
+    for (const n of [...world.neighbourhoods, ...world.wilds]) {
+      for (const t of n.layout.tiles) keys.push(`${n.x + t.x},${n.z + t.z}`)
+    }
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it('makes a map close to a square', () => {
+    const world = worldLayout(homelab)
+    const aspect = world.halfWidth / world.halfDepth
+    expect(aspect).toBeGreaterThan(0.6)
+    expect(aspect).toBeLessThan(1.6)
+  })
+
+  it('weighs a host by its services, its vm-hosts and their services', () => {
+    expect(sizeScore([{ id: 'h', services: 0 }])).toBe(20)
+    expect(sizeScore([{ id: 'h', services: 3 }])).toBe(20 + 3 * 5)
+    expect(
+      sizeScore([
+        { id: 'h', services: 3 },
+        { id: 'v1', services: 2 },
+        { id: 'v2', services: 0 },
+      ]),
+    ).toBe(20 + 3 * 5 + (15 + 2 * 6) + 15)
+  })
+
+  it('leaves no void on the ground, even with very tall hosts', () => {
+    const homelab = [
+      spec('a', 3, 9, 4),
+      spec('b', 12),
+      spec('c'),
+      spec('d', 2, 20),
+      spec('e', 5),
+      spec('f'),
+      spec('g', 30),
+    ]
+    const world = worldLayout(homelab)
+    const tiles = new Set<string>()
+    for (const n of [...world.neighbourhoods, ...world.wilds]) {
+      for (const t of n.layout.tiles) tiles.add(`${n.x + t.x},${n.z + t.z}`)
+    }
+    const xs = [...tiles].map((k) => Number(k.split(',')[0]))
+    const zs = [...tiles].map((k) => Number(k.split(',')[1]))
+    const [x0, x1] = [Math.min(...xs), Math.max(...xs)]
+    const [z0, z1] = [Math.min(...zs), Math.max(...zs)]
+    expect(tiles.size).toBe((x1 - x0 + 1) * (z1 - z0 + 1))
   })
 
   it('plants nothing on the roads that link the plates', () => {
@@ -151,10 +198,11 @@ describe('worldLayout', () => {
         if (a.n === b.n) continue
         const sideways = Math.abs(a.x - b.x - (a.z - b.z)) / Math.SQRT2
         const depth = (a.x - b.x + (a.z - b.z)) / Math.SQRT2
-        const reach = a.height * Math.sqrt(3) + 2 * HALF_SCREEN_WIDTH
-        expect(
-          sideways >= 2 * HALF_SCREEN_WIDTH + 1 || depth <= 0 || depth >= reach,
-        ).toBe(true)
+        const halves = (a.width + b.width) / Math.SQRT2
+        const reach = a.height * Math.sqrt(3) + halves
+        expect(sideways >= halves + 1 || depth <= 0 || depth >= reach).toBe(
+          true,
+        )
       }
     }
   })
