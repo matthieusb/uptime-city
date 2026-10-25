@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+data/
+example/config.yaml
+example/test/
+tests/
+*.db
+*.db-wal
+*.db-shm
