@@ -1,4 +1,5 @@
-FROM node:24-slim AS build
+# The built app is static, so it is built once on the builder's own architecture, never emulated.
+FROM --platform=$BUILDPLATFORM node:24-slim AS build
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
