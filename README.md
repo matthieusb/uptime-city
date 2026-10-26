@@ -57,7 +57,7 @@ See `backend/README.md` and `frontend/README.md` for details.
 
 ## Self host
 
-Release images are published to the GitHub container registry: `ghcr.io/matthieusb/uptime-city-backend` and `ghcr.io/matthieusb/uptime-city-frontend`. Replace `latest` with a version such as `0.1.0` to pin it, and use the same version for both. Both need a monitoring config: start from `backend/example/config.example.yaml` and save your copy as `config.yaml` (see `backend/README.md`).
+Release images are published to the GitHub container registry for `linux/amd64` and `linux/arm64`: `ghcr.io/matthieusb/uptime-city-backend` and `ghcr.io/matthieusb/uptime-city-frontend`. Replace `latest` with a version such as `0.1.0` to pin it, and use the same version for both. Both need a monitoring config: start from `backend/example/config.example.yaml` and save your copy as `config.yaml` (see `backend/README.md`).
 
 The frontend serves the app on port 8080 and proxies `/api/` to the backend, which listens on port 8000 inside the Docker network. Only the frontend needs to be published.
 

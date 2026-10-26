@@ -49,7 +49,7 @@ Releases are made by the manual `Release` workflow (`.github/workflows/release.y
    - `major`: breaking changes (`1.2.3` → `2.0.0`).
 3. The workflow then:
    - computes the next [SemVer](https://semver.org/) version from the latest `vX.Y.Z` tag (the first release is `v0.1.0`, or `v1.0.0` with `major`);
-   - builds and pushes `ghcr.io/matthieusb/uptime-city-backend` and `ghcr.io/matthieusb/uptime-city-frontend`, tagged `X.Y.Z`, `X.Y` and `latest` (and `X` once past `0.x`);
+   - builds and pushes `ghcr.io/matthieusb/uptime-city-backend` and `ghcr.io/matthieusb/uptime-city-frontend` for `linux/amd64` and `linux/arm64` (arm64 is emulated with QEMU on the amd64 runner, except the frontend's build stage, which runs natively), tagged `X.Y.Z`, `X.Y` and `latest` (and `X` once past `0.x`);
    - creates the tag `vX.Y.Z` on the latest commit of `main` and the GitHub release of the same name, with generated notes.
 
 The tag and the release are created only after both images are pushed, so a failed run leaves no tag: fix the cause and run it again.
