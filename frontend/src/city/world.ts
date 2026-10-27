@@ -86,7 +86,7 @@ type Ground = Pick<
 const BEFORE: DecorKind[] = ['houses']
 const AFTER: DecorKind[] = ['supermarket', 'parking']
 
-function withDecor(spec: NeighbourhoodSpec): HostSpec[] {
+export function withDecor(spec: NeighbourhoodSpec): HostSpec[] {
   const decor = (kind: DecorKind, n: number): HostSpec => ({
     id: `${spec.id}:decor-${n}`,
     services: 0,

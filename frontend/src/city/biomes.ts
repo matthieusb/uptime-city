@@ -34,6 +34,8 @@ export interface Spot {
   u: number
   v: number
   front: boolean
+  // On the planet only: how far from the equator, from 0 to 1 at the poles.
+  latitude?: number
 }
 
 function hash(plain: string): number {
@@ -59,7 +61,19 @@ export function noise(text: string): number {
 // How likely each biome is at a spot: forests and cities anywhere,
 // mountains mostly at the middle, deserts and tundras rarely, and coastal
 // cities only at the front.
-function weights({ u, v, front }: Spot): Record<Biome, number> {
+function weights({ u, v, front, latitude }: Spot): Record<Biome, number> {
+  // On the planet, the cold gathers at the poles and the dry at the equator, and no sea
+  // is a coast: every island has its own.
+  if (latitude !== undefined) {
+    return {
+      forest: 3,
+      city: 3,
+      mountain: 0.2 + 2 * latitude,
+      coastal: 0,
+      desert: 0.2 + 1.5 * (1 - latitude) ** 2,
+      tundra: 0.2 + 6 * latitude ** 2,
+    }
+  }
   const middle = Math.max(
     0,
     1 - 2 * Math.max(Math.abs(u - 0.5), Math.abs(v - 0.5)),
