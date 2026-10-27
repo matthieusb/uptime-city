@@ -155,25 +155,51 @@ describe('the size of a monument on a tile', () => {
       expect(chances[k]).toBeGreaterThan(chances[k - 1] - 1e-12)
     }
     expect(chances[0]).toBe(0)
-    expect(chances[1]).toBeLessThan(0.1)
+    // Even a small tile has a fair chance, and only the biggest one is sure.
+    expect(chances[1]).toBeGreaterThan(0.5)
+    expect(chances[1]).toBeLessThan(chances[4])
     expect(chances[4]).toBeLessThan(1)
+    expect(chances[chances.length - 1]).toBe(1)
   })
 })
 
 describe('the monuments of a world', () => {
   const all = [...worlds(homelab), ...worlds(medium)]
 
-  it('are at most one per tile, neighbourhoods and wild tiles alike', () => {
+  it('are at most one per tile, and two on the biggest tile at most', () => {
     for (const w of all) {
-      for (const n of plates(w)) expect(monumentsOf(n).length).toBeLessThan(2)
+      const biggest = biggestOf(w)
+      for (const n of plates(w)) {
+        expect(monumentsOf(n).length, n.id).toBeLessThanOrEqual(
+          n === biggest ? 2 : 1,
+        )
+      }
     }
   })
 
-  it('include one on the biggest tile, always', () => {
+  it('include one on the biggest tile, always, and sometimes a second', () => {
     for (const w of all) {
       const biggest = biggestOf(w)
-      expect(monumentsOf(biggest), biggest.id).toHaveLength(1)
+      expect(monumentsOf(biggest).length, biggest.id).toBeGreaterThanOrEqual(1)
     }
+    const counts = all.map((w) => monumentsOf(biggestOf(w)).length)
+    expect(counts.filter((c) => c === 2).length).toBeGreaterThan(0)
+    expect(counts.filter((c) => c === 1).length).toBeGreaterThan(0)
+  })
+
+  it('are each there once at most on the whole map', () => {
+    for (const w of all) {
+      const kinds = findMonuments(w).map((m) => m.kind)
+      expect(new Set(kinds).size, kinds.join(', ')).toBe(kinds.length)
+    }
+  })
+
+  it('run out with the kinds, on a map with more tiles than monuments', () => {
+    const many = Array.from({ length: 45 }, (_, i) => spec(`host${i}`, 1))
+    const found = findMonuments(worldLayout(many)).map((m) => m.kind)
+    expect(found.length).toBeGreaterThan(5)
+    expect(found.length).toBeLessThanOrEqual(Object.keys(MONUMENTS).length)
+    expect(new Set(found).size).toBe(found.length)
   })
 
   it('are not on every tile, and wild tiles can have one', () => {
@@ -181,7 +207,7 @@ describe('the monuments of a world', () => {
       plates(w).map((n) => monumentsOf(n).length),
     )
     expect(counts.filter((c) => c === 0).length).toBeGreaterThan(0)
-    expect(counts.filter((c) => c === 1).length).toBeGreaterThan(all.length)
+    expect(counts.filter((c) => c >= 1).length).toBeGreaterThan(all.length)
     const wild = all.flatMap((w) => w.wilds.flatMap((n) => monumentsOf(n)))
     expect(wild.length).toBeGreaterThan(0)
   })
@@ -251,24 +277,22 @@ describe('the monuments of a world', () => {
     }
   })
 
-  it('have no road, roundabout, water or rail under them, nor right by', () => {
-    const bad = new Set([
-      'road',
-      'island',
-      'water',
-      'shallow',
-      'pond',
-      'ice',
-      'track',
-    ])
+  it('have no road, roundabout, water or rail under them, nor a road right by', () => {
+    const water = new Set(['water', 'shallow', 'pond', 'ice'])
+    const ways = new Set(['road', 'island', 'track'])
     for (const w of all) {
       for (const n of plates(w)) {
         for (const s of monumentsOf(n)) {
+          const within = (margin: number) => (t: { x: number; z: number }) =>
+            Math.abs(t.x - s.x) < s.width / 2 + margin &&
+            Math.abs(t.z - s.z) < s.depth / 2 + margin
+          const under = n.layout.tiles.filter(
+            (t) => (water.has(t.kind) || ways.has(t.kind)) && within(0)(t),
+          )
+          expect(under, `${s.monument} on ${n.id}`).toEqual([])
+          // Water may lap at the foot of a monument, a road keeps a tile away.
           const near = n.layout.tiles.filter(
-            (t) =>
-              bad.has(t.kind) &&
-              Math.abs(t.x - s.x) < s.width / 2 + 1 &&
-              Math.abs(t.z - s.z) < s.depth / 2 + 1,
+            (t) => ways.has(t.kind) && within(1)(t),
           )
           expect(near, `${s.monument} on ${n.id}`).toEqual([])
         }

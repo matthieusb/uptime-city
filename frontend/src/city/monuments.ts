@@ -1,6 +1,7 @@
 // The monuments of the map, independent of three.js. Every tile (neighbourhood or wild tile) may
-// have one, never more: the biggest tile always does, and the smaller the tile, the less likely
-// one is. Its size follows the size of the tile, and its kind goes with the biome of the ground
+// have one, never more, except the biggest tile, which has one for sure and may have a second:
+// the smaller the tile, the less likely it is to have one. A monument stands once at most on the
+// whole map. Its size follows the size of the tile, and its kind goes with the biome of the ground
 // it stands on. It is placed like the airport (footprint.ts): on land, away from roads, water and
 // the railway, never over a monitored building nor hiding one on screen; whatever else stands
 // there (trees, houses, a tennis club...) makes way for it. The drawing is in monumentShapes.ts.
@@ -34,8 +35,12 @@ const FROM_AREA: Record<MonumentSize, number> = {
   big: 2800,
 }
 
-// How fast the chance of a monument falls with the area of a tile, against the biggest one.
-const CHANCE_POWER = 2
+// The chance of a monument on a tile of any size, and how fast it rises from there to 1 with the
+// area of the tile, against the biggest one (the square root: the smaller tiles keep a good share).
+const MIN_CHANCE = 0.5
+const CHANCE_POWER = 0.5
+// The chance that the biggest tile has a second monument.
+const SECOND_CHANCE = 0.5
 
 export type MonumentKind =
   | 'statue-of-liberty'
@@ -138,10 +143,11 @@ export function sizeClass(area: number): MonumentSize {
 }
 
 // How likely a tile of this area is to have a monument, when the biggest tile has this one: 1 for
-// the biggest, then falling with the area.
+// the biggest, then falling with the area down to MIN_CHANCE, and 0 for no area at all.
 export function monumentChance(area: number, biggest: number): number {
   if (biggest <= 0 || area <= 0) return 0
-  return Math.min(1, Math.pow(area / biggest, CHANCE_POWER))
+  const share = Math.pow(Math.min(1, area / biggest), CHANCE_POWER)
+  return MIN_CHANCE + (1 - MIN_CHANCE) * share
 }
 
 const areaOf = (n: Neighbourhood) => 4 * n.layout.halfWidth * n.layout.halfDepth
@@ -193,34 +199,56 @@ export function solids(kind: MonumentKind): Solid[] {
 // A stable value in [0, 1) for a text, tied to the seed of the world.
 const unit = (text: string) => hash(text) / 4294967296
 
-// Puts a monument on the biggest tile for sure, and on each other tile by chance.
+// Puts a monument on the biggest tile for sure, and on each other tile by chance. A monument is
+// there once at most on the whole map, and the biggest tile may have a second one.
 export function placeMonuments(world: World): World {
   const all = [...world.neighbourhoods, ...world.wilds]
   if (all.length === 0) return world
   const biggest = all.reduce((best, n) => (areaOf(n) > areaOf(best) ? n : best))
   const top = areaOf(biggest)
-  const lay = (n: Neighbourhood) => {
+  // The bigger tiles choose first, so that they get the bigger monuments.
+  const order = [...all].sort(
+    (a, b) => areaOf(b) - areaOf(a) || (a.id < b.id ? -1 : 1),
+  )
+  const used = new Set<MonumentKind>()
+  const laid = new Map<Neighbourhood, Neighbourhood>()
+  for (const n of order) {
     const sure = n === biggest
-    if (!sure && unit(`monument:${n.id}`) >= monumentChance(areaOf(n), top)) {
-      return n
+    let plate = n
+    if (sure || unit(`monument:${n.id}`) < monumentChance(areaOf(n), top)) {
+      plate = withMonument(world, plate, used)
     }
-    return withMonument(world, n)
+    if (sure && unit(`monument:second:${n.id}`) < SECOND_CHANCE) {
+      plate = withMonument(world, plate, used)
+    }
+    laid.set(n, plate)
   }
   return {
     ...world,
-    neighbourhoods: world.neighbourhoods.map(lay),
-    wilds: world.wilds.map(lay),
+    neighbourhoods: world.neighbourhoods.map((n) => laid.get(n)!),
+    wilds: world.wilds.map((n) => laid.get(n)!),
   }
 }
 
-// The plate with the biggest monument its size allows, among those that go with a biome of its
-// ground and fit; a smaller one if none does, and none if even the smallest does not fit.
-function withMonument(world: World, plate: Neighbourhood): Neighbourhood {
-  const ground = groundOf(world, plate, 0, (s) => s.kind === 'airport')
+// The plate with the biggest monument its size allows, among those not used yet that go with a
+// biome of its ground and fit; a smaller one if none does, and none if even the smallest does not
+// fit. The monument is added to `used`.
+function withMonument(
+  world: World,
+  plate: Neighbourhood,
+  used: Set<MonumentKind>,
+): Neighbourhood {
+  const ground = groundOf(
+    world,
+    plate,
+    0,
+    (s) => s.kind === 'airport' || s.kind === 'monument',
+  )
   const present = new Set(plate.layout.tiles.map((t) => t.biome))
   for (let k = SIZES.indexOf(sizeClass(areaOf(plate))); k >= 0; k--) {
     const kinds = KINDS.filter(
       (kind) =>
+        !used.has(kind) &&
         MONUMENTS[kind].size === SIZES[k] &&
         MONUMENTS[kind].biomes.some((b) => present.has(b)),
     ).sort(
@@ -229,7 +257,10 @@ function withMonument(world: World, plate: Neighbourhood): Neighbourhood {
     )
     for (const kind of kinds) {
       const spot = search(plate, ground, kind)
-      if (spot) return build(plate, kind, spot)
+      if (spot) {
+        used.add(kind)
+        return build(plate, kind, spot)
+      }
     }
   }
   return plate
