@@ -4,16 +4,8 @@
 // placed where no road, no monitored building and no water is, at least `EDGE` tiles from the edges
 // of the map; whatever else stands there (trees, houses, a tennis club...) makes way for it.
 // The planes are in flights.ts.
-import {
-  GRASS_TOP,
-  PLAZA_MARGIN,
-  PLAZA_TOP,
-  hash,
-  hides,
-  type Structure,
-  type Tile,
-  type TileKind,
-} from './layout'
+import { type Grid, clearFootprint, groundOf, level } from './footprint'
+import { PLAZA_TOP, hash, hides, type Structure, type Tile } from './layout'
 import type { Neighbourhood, World } from './world'
 
 // How far from every edge of the map the airport stays, in tiles.
@@ -79,14 +71,36 @@ export function turned(turn: number, x: number, z: number): [number, number] {
 }
 
 // Paved parts of the airport, as [x0, x1, z0, z1] in its frame.
-function paved(l: AirportLayout): [number, number, number, number][] {
-  const half = (l.standX.length * STAND_SPACING) / 2
+function paved(
+  airportLayout: AirportLayout,
+): [number, number, number, number][] {
+  const half = (airportLayout.standX.length * STAND_SPACING) / 2
   const run = RUNWAY_WIDTH / 2
   return [
-    [-l.length / 2, l.length / 2, RUNWAY_Z - run, RUNWAY_Z + run],
-    [-l.link - 0.5, l.link + 0.5, TAXI_Z - 0.5, TAXI_Z + 0.5],
-    [-l.link - 0.5, -l.link + 0.5, TAXI_Z, RUNWAY_Z - run],
-    [l.link - 0.5, l.link + 0.5, TAXI_Z, RUNWAY_Z - run],
+    [
+      -airportLayout.length / 2,
+      airportLayout.length / 2,
+      RUNWAY_Z - run,
+      RUNWAY_Z + run,
+    ],
+    [
+      -airportLayout.link - 0.5,
+      airportLayout.link + 0.5,
+      TAXI_Z - 0.5,
+      TAXI_Z + 0.5,
+    ],
+    [
+      -airportLayout.link - 0.5,
+      -airportLayout.link + 0.5,
+      TAXI_Z,
+      RUNWAY_Z - run,
+    ],
+    [
+      airportLayout.link - 0.5,
+      airportLayout.link + 0.5,
+      TAXI_Z,
+      RUNWAY_Z - run,
+    ],
     [-half, half, -4.5, TAXI_Z + 0.5],
     [-half - 0.5, half + 0.5, -7.5, -4.5],
   ]
@@ -95,14 +109,14 @@ function paved(l: AirportLayout): [number, number, number, number][] {
 // The parts that rise from the ground and could hide a building behind them: the terminal and the
 // hangar in slices, and the tower. In the airport frame.
 export function solids(
-  l: AirportLayout,
+  airportLayout: AirportLayout,
 ): { x: number; z: number; height: number; radius: number }[] {
-  const half = (l.standX.length * STAND_SPACING) / 2
+  const half = (airportLayout.standX.length * STAND_SPACING) / 2
   const out = [{ x: half + 1.5, z: -6, height: TOWER_HEIGHT, radius: 0.8 }]
   for (let x = -half + 1; x < half + 0.5; x += 2) {
     out.push({ x, z: -6, height: 1.3, radius: 1.5 })
   }
-  if (l.hangar) {
+  if (airportLayout.hangar) {
     for (const x of [-half - 4, -half - 2]) {
       out.push({ x, z: -5.4, height: 1.8, radius: 1.5 })
     }
@@ -121,7 +135,7 @@ export interface BoxOut {
 
 // Every box of the airport (color, then the middle and size of the box, y from the ground), in
 // its own frame.
-export function airportShape(l: AirportLayout): {
+export function airportShape(airportLayout: AirportLayout): {
   color: string
   at: [number, number, number]
   size: [number, number, number]
@@ -136,13 +150,21 @@ export function airportShape(l: AirportLayout): {
     sy: number,
     sz: number,
   ) => out.push({ color, at: [x, y, z], size: [sx, sy, sz] })
-  const half = (l.standX.length * STAND_SPACING) / 2
-  const run = l.length / 2
+  const half = (airportLayout.standX.length * STAND_SPACING) / 2
+  const run = airportLayout.length / 2
 
   // The runway, with its edge lines, centre dashes and the bars at both ends.
-  box('#34343c', 0, 0.02, RUNWAY_Z, l.length, 0.04, RUNWAY_WIDTH)
+  box('#34343c', 0, 0.02, RUNWAY_Z, airportLayout.length, 0.04, RUNWAY_WIDTH)
   for (const dz of [-1.35, 1.35]) {
-    box('#f4f1ea', 0, 0.045, RUNWAY_Z + dz, l.length - 1, 0.02, 0.06)
+    box(
+      '#f4f1ea',
+      0,
+      0.045,
+      RUNWAY_Z + dz,
+      airportLayout.length - 1,
+      0.02,
+      0.06,
+    )
   }
   for (let x = -run + 4; x <= run - 4 + 1e-6; x += 2) {
     box('#f4f1ea', x, 0.045, RUNWAY_Z, 1, 0.02, 0.1)
@@ -161,12 +183,12 @@ export function airportShape(l: AirportLayout): {
     }
   }
   // The taxiway and its links, with a yellow line, and the apron.
-  box('#45454d', 0, 0.02, TAXI_Z, 2 * l.link + 1, 0.04, 1)
-  box('#ffd23f', 0, 0.045, TAXI_Z, 2 * l.link + 1, 0.02, 0.05)
+  box('#45454d', 0, 0.02, TAXI_Z, 2 * airportLayout.link + 1, 0.04, 1)
+  box('#ffd23f', 0, 0.045, TAXI_Z, 2 * airportLayout.link + 1, 0.02, 0.05)
   for (const sign of [-1, 1]) {
     box(
       '#45454d',
-      sign * l.link,
+      sign * airportLayout.link,
       0.02,
       (TAXI_Z + RUNWAY_Z - 1.5) / 2 + 0.25,
       1,
@@ -175,7 +197,7 @@ export function airportShape(l: AirportLayout): {
     )
     box(
       '#ffd23f',
-      sign * l.link,
+      sign * airportLayout.link,
       0.045,
       (TAXI_Z + RUNWAY_Z - 1.5) / 2 + 0.25,
       0.05,
@@ -184,7 +206,7 @@ export function airportShape(l: AirportLayout): {
     )
   }
   box('#8e8e96', 0, 0.02, -1.5, 2 * half, 0.04, 6)
-  for (const x of l.standX) {
+  for (const x of airportLayout.standX) {
     box('#ffd23f', x, 0.045, -1.6, 0.06, 0.02, 3.2)
     box('#f4f1ea', x + STAND_SPACING / 2, 0.045, -2.2, 0.05, 0.02, 4)
   }
@@ -194,13 +216,14 @@ export function airportShape(l: AirportLayout): {
   box('#e8e4da', 0, 0.65, -6, tw, 1.3, 3)
   box('#8a8f98', 0, 1.34, -6, tw + 0.3, 0.12, 3)
   box('#2b3a55', 0, 0.75, -4.47, tw - 0.8, 0.5, 0.05)
-  for (const x of l.standX) box('#c9ccd2', x, 0.7, -4.35, 0.4, 0.3, 0.3)
+  for (const x of airportLayout.standX)
+    box('#c9ccd2', x, 0.7, -4.35, 0.4, 0.3, 0.3)
   const tx = half + 1.5
   box('#d9d6cc', tx, 1.0, -6, 0.7, 2, 0.7)
   box('#9fd3ff', tx, 2.25, -6, 1.1, 0.5, 1.1)
   box('#8a8f98', tx, 2.6, -6, 1.3, 0.12, 1.3)
   box('#c0392b', tx, 3.15, -6, 0.06, 0.9, 0.06)
-  if (l.hangar) {
+  if (airportLayout.hangar) {
     const hx = -half - 3
     box('#b9bec7', hx, 0.8, -5.4, 4, 1.6, 3)
     box('#8a8f98', hx, 1.7, -5.4, 4.3, 0.2, 3.3)
@@ -233,16 +256,6 @@ export function airportBoxes(
   }
 }
 
-const LAND = new Set<TileKind>([
-  'grass',
-  'hill',
-  'sand',
-  'snow',
-  'plaza',
-  'path',
-  'court',
-])
-
 // The airport of a world: where it is, in the frame of its plate, and how far the edges of the
 // map are along its runway. Null if there is none.
 export interface Airport {
@@ -256,7 +269,9 @@ export interface Airport {
 
 export function findAirport(world: World): Airport | null {
   for (const plate of world.neighbourhoods) {
-    const structure = plate.layout.structures.find((s) => s.kind === 'airport')
+    const structure = plate.layout.structures.find(
+      (structure) => structure.kind === 'airport',
+    )
     if (!structure) continue
     const turn = structure.turn ?? 0
     const layout = airportLayout(
@@ -283,13 +298,13 @@ export function findAirport(world: World): Airport | null {
 // The neighbourhood with the biggest ground; the first one if several are as big.
 function biggest(world: World): Neighbourhood | null {
   let best: Neighbourhood | null = null
-  for (const n of world.neighbourhoods) {
+  for (const neighbourhood of world.neighbourhoods) {
     if (
       !best ||
-      n.layout.halfWidth * n.layout.halfDepth >
+      neighbourhood.layout.halfWidth * neighbourhood.layout.halfDepth >
         best.layout.halfWidth * best.layout.halfDepth
     ) {
-      best = n
+      best = neighbourhood
     }
   }
   return best
@@ -312,120 +327,16 @@ export function placeAirport(world: World): World {
   if (!found) return world
   return {
     ...world,
-    neighbourhoods: world.neighbourhoods.map((n) =>
-      n === plate ? build(n, found) : n,
+    neighbourhoods: world.neighbourhoods.map((neighbourhood) =>
+      neighbourhood === plate ? build(neighbourhood, found) : neighbourhood,
     ),
   }
 }
 
-interface Grid {
-  minX: number
-  minZ: number
-  nx: number
-  nz: number
-}
-
 function search(world: World, plate: Neighbourhood): Spot | null {
   const { layout } = plate
-  const minX = Math.min(...layout.tiles.map((t) => t.x))
-  const minZ = Math.min(...layout.tiles.map((t) => t.z))
-  const nx = Math.round(Math.max(...layout.tiles.map((t) => t.x)) - minX) + 1
-  const nz = Math.round(Math.max(...layout.tiles.map((t) => t.z)) - minZ) + 1
-  const grid: Grid = { minX, minZ, nx, nz }
-  const index = (x: number, z: number) =>
-    Math.round(z - minZ) * nx + Math.round(x - minX)
-  const inside = (ix: number, iz: number) =>
-    ix >= 0 && iz >= 0 && ix < nx && iz < nz
-
-  // Tiles the airport cannot stand on, and what it costs to clear the others.
-  const bad = new Uint8Array(nx * nz).fill(1)
-  const cost = new Float64Array(nx * nz)
-  for (const t of layout.tiles) {
-    const gx = plate.x + t.x
-    const gz = plate.z + t.z
-    const awayFromEdges =
-      Math.abs(gx) + 0.5 <= world.halfWidth - EDGE &&
-      Math.abs(gz) + 0.5 <= world.halfDepth - EDGE
-    if (LAND.has(t.kind) && awayFromEdges) bad[index(t.x, t.z)] = 0
-    if (t.kind === 'path') cost[index(t.x, t.z)] += 1
-    if (t.kind === 'hill') cost[index(t.x, t.z)] += 0.2
-  }
-  // Roads and their roundabouts, and the railway: a tile of margin around them.
-  for (const t of layout.tiles) {
-    if (LAND.has(t.kind)) continue
-    if (t.kind === 'water' || t.kind === 'shallow') continue
-    const [cx, cz] = [Math.round(t.x - minX), Math.round(t.z - minZ)]
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dz = -1; dz <= 1; dz++) {
-        if (inside(cx + dx, cz + dz)) bad[(cz + dz) * nx + cx + dx] = 1
-      }
-    }
-  }
-  // Monitored buildings and decoration lots, with their square and some room around.
-  for (const n of world.neighbourhoods) {
-    for (const l of n.layout.lots) {
-      const half = l.width / 2 + PLAZA_MARGIN + 1.5
-      const [cx, cz] = [n.x + l.x - plate.x, n.z + l.z - plate.z]
-      for (
-        let ix = Math.floor(cx - half - minX);
-        ix <= Math.ceil(cx + half - minX);
-        ix++
-      ) {
-        for (
-          let iz = Math.floor(cz - half - minZ);
-          iz <= Math.ceil(cz + half - minZ);
-          iz++
-        ) {
-          const [x, z] = [ix + minX, iz + minZ]
-          if (
-            inside(ix, iz) &&
-            Math.abs(x - cx) < half + 0.5 &&
-            Math.abs(z - cz) < half + 0.5
-          ) {
-            bad[iz * nx + ix] = 1
-          }
-        }
-      }
-    }
-  }
-  for (const tree of layout.trees) {
-    const [ix, iz] = [Math.round(tree.x - minX), Math.round(tree.z - minZ)]
-    if (inside(ix, iz)) cost[iz * nx + ix] += 0.3
-  }
-  for (const s of layout.structures) {
-    for (let di = 0; di < s.width; di++) {
-      for (let dj = 0; dj < s.depth; dj++) {
-        const ix = Math.round(s.x - (s.width - 1) / 2 + di - minX)
-        const iz = Math.round(s.z - (s.depth - 1) / 2 + dj - minZ)
-        if (inside(ix, iz)) cost[iz * nx + ix] += 4
-      }
-    }
-  }
-
-  // Sums over rectangles, in constant time.
-  const sums = (values: ArrayLike<number>) => {
-    const out = new Float64Array((nx + 1) * (nz + 1))
-    for (let iz = 0; iz < nz; iz++) {
-      for (let ix = 0; ix < nx; ix++) {
-        out[(iz + 1) * (nx + 1) + ix + 1] =
-          values[iz * nx + ix] +
-          out[iz * (nx + 1) + ix + 1] +
-          out[(iz + 1) * (nx + 1) + ix] -
-          out[iz * (nx + 1) + ix]
-      }
-    }
-    return (ix: number, iz: number, w: number, d: number) =>
-      out[(iz + d) * (nx + 1) + ix + w] -
-      out[iz * (nx + 1) + ix + w] -
-      out[(iz + d) * (nx + 1) + ix] +
-      out[iz * (nx + 1) + ix]
-  }
-  const badIn = sums(bad)
-  const costIn = sums(cost)
-
-  const lots = world.neighbourhoods.flatMap((n) =>
-    n.layout.lots.map((l) => ({ x: n.x + l.x, z: n.z + l.z, width: l.width })),
-  )
+  const { grid, badIn, costIn, lots } = groundOf(world, plate, EDGE)
+  const { nx, nz } = grid
   const target = runwayLength(layout.halfWidth, layout.halfDepth)
   for (let length = target; length >= MIN_LENGTH; length -= 2) {
     const l = airportLayout(length)
@@ -440,12 +351,12 @@ function search(world: World, plate: Neighbourhood): Spot | null {
       }
     }
     spots.sort(
-      (a, b) =>
-        a.cost - b.cost ||
-        hash(`airport:${a.turn}:${a.ix}:${a.iz}`) -
+      (spot, b) =>
+        spot.cost - b.cost ||
+        hash(`airport:${spot.turn}:${spot.ix}:${spot.iz}`) -
           hash(`airport:${b.turn}:${b.ix}:${b.iz}`),
     )
-    const spot = spots.find((s) => hidesNothing(plate, grid, s, lots))
+    const spot = spots.find((spot) => hidesNothing(plate, grid, spot, lots))
     if (spot) return spot
   }
   return null
@@ -492,8 +403,6 @@ function build(plate: Neighbourhood, spot: Spot): Neighbourhood {
   }
   const c = centre(grid, spot)
   const l = airportLayout(spot.length)
-  const within = (x: number, z: number, margin = 0) =>
-    Math.abs(x - c.x) < c.w / 2 + margin && Math.abs(z - c.z) < c.d / 2 + margin
   const parts = paved(l)
   const isPaved = (t: Tile) => {
     const [lx, lz] = turned(4 - spot.turn, t.x - c.x, t.z - c.z)
@@ -501,30 +410,6 @@ function build(plate: Neighbourhood, spot: Spot): Neighbourhood {
       ([x0, x1, z0, z1]) => lx > x0 && lx < x1 && lz > z0 && lz < z1,
     )
   }
-  // A tennis club goes whole, as a road through it would take it.
-  const hit = (s: Structure) =>
-    Math.abs(s.x - c.x) < (s.width + c.w) / 2 &&
-    Math.abs(s.z - c.z) < (s.depth + c.d) / 2
-  const club = (s: Structure) => s.kind === 'tennis' || s.kind === 'clubhouse'
-  const clubHit = layout.structures.some((s) => club(s) && hit(s))
-  const goes = (s: Structure) => hit(s) || (clubHit && club(s))
-  const removed = layout.structures.filter(goes)
-  const under = (t: Tile) =>
-    removed.some(
-      (s) =>
-        Math.abs(t.x - s.x) < s.width / 2 && Math.abs(t.z - s.z) < s.depth / 2,
-    )
-  const tiles = layout.tiles.map((t): Tile => {
-    if (within(t.x, t.z)) {
-      if (isPaved(t)) return { ...t, kind: 'plaza', top: PLAZA_TOP }
-      if (t.kind === 'hill' || t.kind === 'path' || t.kind === 'court') {
-        return { ...t, kind: 'grass', top: GRASS_TOP }
-      }
-      return t
-    }
-    return under(t) ? { ...t, kind: 'grass', top: GRASS_TOP } : t
-  })
-  const free = (p: { x: number; z: number }) => !within(p.x, p.z, 0.5)
   const airport: Structure = {
     kind: 'airport',
     x: c.x,
@@ -537,15 +422,11 @@ function build(plate: Neighbourhood, spot: Spot): Neighbourhood {
   }
   return {
     ...plate,
-    layout: {
-      ...layout,
-      tiles,
-      trees: layout.trees.filter(free),
-      flowers: layout.flowers.filter(free),
-      reeds: layout.reeds.filter(free),
-      rocks: layout.rocks.filter(free),
-      umbrellas: layout.umbrellas.filter(free),
-      structures: [...layout.structures.filter((s) => !goes(s)), airport],
-    },
+    layout: clearFootprint(
+      layout,
+      c,
+      (t) => (isPaved(t) ? { ...t, kind: 'plaza', top: PLAZA_TOP } : level(t)),
+      airport,
+    ),
   }
 }

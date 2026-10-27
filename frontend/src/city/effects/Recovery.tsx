@@ -53,7 +53,9 @@ function Wave({
   const height = floorHeight(floor)
 
   useFrame(({ clock }) => {
-    const found = recovered.current?.find((r) => r.floor === floor)
+    const found = recovered.current?.find(
+      (recovered) => recovered.floor === floor,
+    )
     const age = found ? clock.elapsedTime - found.start : -1
     const active = recoveryActive(age)
     if (front.current) {

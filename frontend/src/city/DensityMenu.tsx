@@ -36,7 +36,7 @@ export default function DensityMenu({
             max={DENSITY_MAX}
             step={DENSITY_STEP}
             value={values[kind]}
-            onChange={(e) => onChange(kind, Number(e.target.value))}
+            onChange={(event) => onChange(kind, Number(event.target.value))}
           />
         </label>
       ))}

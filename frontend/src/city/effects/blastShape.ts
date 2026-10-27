@@ -34,6 +34,7 @@ export const blastWallHeight = (since: number): number =>
 const TILES_PER_FIRE = 26
 export const MIN_FLAMES = 8
 export const MAX_FLAMES = 140
+// Each fire is a column of this many cubes.
 export const CUBES = 6
 
 // How many fires burn on a tile of the given half sizes: the bigger it is, the more.
@@ -103,42 +104,12 @@ export function flameCube(
   }
 }
 
-// The front of the wave is a wall of flames: columns of cubes standing around the circle of the
-// wave, as many as it takes to close the wall at its widest, which is the reach of the tile.
-export const WAVE_CUBES = 3
-const COLUMN_SPACING = 1.6
-
-export function waveColumns(reach: number): number {
-  return Math.min(
-    160,
-    Math.max(24, Math.ceil((2 * Math.PI * reach) / COLUMN_SPACING)),
-  )
+// How wide the fiery band of the wave is across, at the given radius of the wave: thin at the
+// start, wider as the wave spreads up to a limit, and never wider than the radius itself.
+export function waveThickness(radius: number): number {
+  return Math.max(0, Math.min(radius, 3, 0.8 + 0.06 * radius))
 }
 
-// A cube of the wall of flames of the wave, at the given radius `since` the impact and at time t:
-// it stands on the circle, rises from the ground to the wall's height, shrinking, and goes from
-// bright to dark as it burns out. The cubes are bigger where the columns are further apart, and
-// the whole wall dies down as the wave runs out. Each has its own phase, with nothing stored.
-export function waveCube(
-  column: number,
-  k: number,
-  columns: number,
-  radius: number,
-  since: number,
-  t: number,
-): { x: number; y: number; z: number; scale: number; stage: number } {
-  const phase = (column * 0.6180339 + k * 0.3141) % 1
-  const life = (((t * 1.1 + phase + k / WAVE_CUBES) % 1) + 1) % 1
-  const angle =
-    ((column + 0.5 * Math.sin(column * 12.9898 + k)) / columns) * 2 * Math.PI
-  const away = radius + 0.5 * Math.sin(column * 4.1 + k * 7.7)
-  const spacing = (2 * Math.PI * Math.max(radius, 0.01)) / columns
-  const size = Math.min(1.4, Math.max(0.5, spacing * 0.9))
-  return {
-    x: Math.cos(angle) * away,
-    y: 0.2 + life * blastWallHeight(since) * 1.1,
-    z: Math.sin(angle) * away,
-    scale: size * (1 - 0.6 * life) * blastFade(since),
-    stage: fireStage(life),
-  }
-}
+// Where the wave is on the ramp of colours, 0 white-hot to 1 smoke: white at the impact, red as it
+// spends itself.
+export const blastHeat = (since: number): number => 0.1 + 0.55 * progress(since)

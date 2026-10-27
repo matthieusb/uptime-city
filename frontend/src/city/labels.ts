@@ -36,16 +36,18 @@ export const LABEL_KINDS: LabelInfo[] = [
 ]
 
 export const badgeOf = (kind: LabelKind): Badge =>
-  LABEL_KINDS.find((l) => l.kind === kind)!.badge
+  LABEL_KINDS.find((labelInfo) => labelInfo.kind === kind)!.badge
 
 // The badge as shown on the whole map: a short text, and no name beside it.
 export const shortBadgeOf = (kind: LabelKind): Badge => {
-  const { badge, short } = LABEL_KINDS.find((l) => l.kind === kind)!
+  const { badge, short } = LABEL_KINDS.find(
+    (labelInfo) => labelInfo.kind === kind,
+  )!
   return { ...badge, text: short }
 }
 
 export const ALL_LABELS: ReadonlySet<LabelKind> = new Set(
-  LABEL_KINDS.map((l) => l.kind),
+  LABEL_KINDS.map((labelInfo) => labelInfo.kind),
 )
 
 // Every kind of label shows at first.

@@ -1,4 +1,4 @@
-from tests.helpers import make_client
+from tests.api.helpers import make_client
 
 
 def test_city_seed_is_empty_until_regenerated() -> None:

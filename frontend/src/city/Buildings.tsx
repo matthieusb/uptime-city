@@ -5,6 +5,8 @@ import { badgeBreath, buildingGlow, type BuildingState } from '../domain/status'
 import {
   collapseProgress,
   rebuildProgress,
+  rebuildWanted,
+  rebuiltAfterWave,
   PRELUDE_S,
   floorPose,
   RUBBLE_HEIGHT,
@@ -14,6 +16,7 @@ import {
 import {
   fromMiddle,
   lotCollapse,
+  passTime,
   type SweepRange,
 } from './effects/restoreShape'
 import Demolition from './effects/Demolition'
@@ -136,13 +139,13 @@ export function Label({
   order?: number
 }) {
   const hidden = useContext(LabelsHidden)
-  const gl = useThree((s) => s.gl)
+  const gl = useThree((rootState) => rootState.gl)
   const sprite = useRef<Sprite>(null)
   const pulse = useRef<Sprite>(null)
   // Badges are often rebuilt on render: compare them by what they show.
   const badgeKey = [badge ?? []]
     .flat()
-    .map((b) => `${b.text}|${b.color}|${b.textColor}`)
+    .map((badge) => `${badge.text}|${badge.color}|${badge.textColor}`)
     .join()
   const label = useMemo(() => labelTexture(text, badge), [text, badgeKey])
   useEffect(
@@ -284,19 +287,31 @@ function Building({
       state.floors[0],
       t,
       Date.now() < holdUntil,
-      demolished,
+      rebuildWanted(demolished, !!restore, ruined),
     )
+    // In a restored tile, a building that is up stays in ruins until the wave reaches it, then is
+    // rebuilt like any other that comes back up: floor by floor, in scaffolding. One still down
+    // is only stood up by the wave.
+    const elapsed = restore ? (Date.now() - restore.startedAt) / 1000 : 0
+    const passed = restore
+      ? passTime(fromMiddle(lot.x, lot.z), restore.range)
+      : 0
+    const reached =
+      !!restore && demolished && state.floors[0] !== 'down' && elapsed >= passed
+    if (reached && collapse.current) {
+      collapse.current = rebuiltAfterWave(collapse.current, t, elapsed - passed)
+    }
     const progress = restore
-      ? lotCollapse(
-          fromMiddle(lot.x, lot.z),
-          (Date.now() - restore.startedAt) / 1000,
-          restore.range,
-        )
+      ? reached
+        ? 0
+        : lotCollapse(fromMiddle(lot.x, lot.z), elapsed, restore.range)
       : ruined
         ? 1
         : collapseProgress(collapse.current, t, delay)
     const rebuilding =
-      restore || ruined ? null : rebuildProgress(collapse.current, t)
+      ruined || (restore && !reached)
+        ? null
+        : rebuildProgress(collapse.current, t)
     floors.forEach(({ wall, slab }, i) => {
       const pose = floorPose(lot.id, i, lot.floors, progress)
       // Going up again, floor by floor from the ground.
@@ -383,7 +398,7 @@ function Building({
           collapse={collapse}
         />
       )}
-      {demolished && !ruined && !restore && (
+      {demolished && !ruined && (
         <Rebuild
           id={lot.id}
           width={lot.width}

@@ -177,13 +177,15 @@ describe('lanePoint', () => {
       laneLength(a) > laneLength(b) ? a : b,
     )
     // Crosses more than one plate.
-    const plots = [...world.neighbourhoods, ...world.wilds].map((n) => ({
-      id: n.id,
-      x: n.x,
-      z: n.z,
-      halfWidth: n.layout.halfWidth,
-      halfDepth: n.layout.halfDepth,
-    }))
+    const plots = [...world.neighbourhoods, ...world.wilds].map(
+      (neighbourhood) => ({
+        id: neighbourhood.id,
+        x: neighbourhood.x,
+        z: neighbourhood.z,
+        halfWidth: neighbourhood.layout.halfWidth,
+        halfDepth: neighbourhood.layout.halfDepth,
+      }),
+    )
     const crossed = new Set<number>()
     for (let s = 0; s <= laneLength(longest); s += 1) {
       const p = lanePoint(longest, s, world.roundabouts)

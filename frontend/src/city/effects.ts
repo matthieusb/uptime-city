@@ -18,7 +18,7 @@ export const EFFECT_KINDS: EffectInfo[] = [
 
 // Every effect shows at first.
 export const DEFAULT_EFFECTS: ReadonlySet<EffectKind> = new Set(
-  EFFECT_KINDS.map((e) => e.kind),
+  EFFECT_KINDS.map((effectInfo) => effectInfo.kind),
 )
 
 // How many vehicles and clouds there are, as a multiple of the normal count: the density menu's

@@ -25,9 +25,13 @@ const plates: Neighbourhood[] = [...world.neighbourhoods, ...world.wilds]
 const key = (x: number, z: number) =>
   `${Math.round(2 * x)},${Math.round(2 * z)}`
 const ground = new Map<string, Tile>()
-for (const n of plates) {
-  for (const t of n.layout.tiles) {
-    ground.set(key(n.x + t.x, n.z + t.z), { ...t, x: n.x + t.x, z: n.z + t.z })
+for (const neighbourhood of plates) {
+  for (const t of neighbourhood.layout.tiles) {
+    ground.set(key(neighbourhood.x + t.x, neighbourhood.z + t.z), {
+      ...t,
+      x: neighbourhood.x + t.x,
+      z: neighbourhood.z + t.z,
+    })
   }
 }
 const tiles = [...ground.values()]
@@ -47,15 +51,17 @@ const near = (t: { x: number; z: number }, kind: Tile['kind'], reach = 1) => {
 
 // Where an object of a plate stands on the map.
 const placed = <T extends { x: number; z: number }>(
-  n: Neighbourhood,
+  neighbourhood: Neighbourhood,
   o: T,
 ) => ({
   ...o,
-  x: o.x + n.x,
-  z: o.z + n.z,
+  x: o.x + neighbourhood.x,
+  z: o.z + neighbourhood.z,
 })
-const monitored = world.neighbourhoods.flatMap((n) =>
-  n.layout.lots.filter((l) => !l.decor).map((l) => placed(n, l)),
+const monitored = world.neighbourhoods.flatMap((neighbourhood) =>
+  neighbourhood.layout.lots
+    .filter((lot) => !lot.decor)
+    .map((lot) => placed(neighbourhood, lot)),
 )
 
 describe('the roads of the map', () => {
@@ -66,10 +72,10 @@ describe('the roads of the map', () => {
     expect(horizontal.length).toBeGreaterThan(0)
     const crossed = (w: (typeof horizontal)[number]) =>
       world.neighbourhoods.filter(
-        (n) =>
-          Math.abs(w.at - n.z) < n.layout.halfDepth &&
-          w.from < n.x + n.layout.halfWidth &&
-          w.to > n.x - n.layout.halfWidth,
+        (neighbourhood) =>
+          Math.abs(w.at - neighbourhood.z) < neighbourhood.layout.halfDepth &&
+          w.from < neighbourhood.x + neighbourhood.layout.halfWidth &&
+          w.to > neighbourhood.x - neighbourhood.layout.halfWidth,
       ).length
     expect(Math.max(...horizontal.map(crossed))).toBeGreaterThanOrEqual(2)
     // Two tiles wide, all the way.
@@ -102,7 +108,8 @@ describe('the roads of the map', () => {
       // From one road to another.
       const ends = [w.from, w.to].map((z) =>
         horizontal.some(
-          (h) => Math.abs(h.at - z) < 1e-6 && h.from < w.at && h.to > w.at,
+          (way) =>
+            Math.abs(way.at - z) < 1e-6 && way.from < w.at && way.to > w.at,
         ),
       )
       expect(ends).toEqual([true, true])
@@ -112,14 +119,19 @@ describe('the roads of the map', () => {
   it('puts a roundabout where two roads meet', () => {
     let crossings = 0
     for (const v of vertical) {
-      for (const h of horizontal) {
-        if (h.at < v.from || h.at > v.to || h.from > v.at || h.to < v.at) {
+      for (const way of horizontal) {
+        if (
+          way.at < v.from ||
+          way.at > v.to ||
+          way.from > v.at ||
+          way.to < v.at
+        ) {
           continue
         }
         crossings++
         expect(
           world.roundabouts.some(
-            (r) => Math.abs(r.x - v.at) < 1e-6 && Math.abs(r.z - h.at) < 1e-6,
+            (r) => Math.abs(r.x - v.at) < 1e-6 && Math.abs(r.z - way.at) < 1e-6,
           ),
         ).toBe(true)
         // An island in the middle, ringed by road.
@@ -127,7 +139,7 @@ describe('the roads of the map', () => {
           [-0.5, -0.5],
           [0.5, 0.5],
         ]) {
-          expect(kindAt(v.at + dx, h.at + dz)).toBe('island')
+          expect(kindAt(v.at + dx, way.at + dz)).toBe('island')
         }
         for (const [dx, dz] of [
           [-1.5, -1.5],
@@ -135,7 +147,7 @@ describe('the roads of the map', () => {
           [-2.5, 0.5],
           [0.5, 2.5],
         ]) {
-          expect(kindAt(v.at + dx, h.at + dz)).toBe('road')
+          expect(kindAt(v.at + dx, way.at + dz)).toBe('road')
         }
       }
     }
@@ -156,15 +168,23 @@ describe('the roads of the map', () => {
   })
 
   it('grows nothing and builds nothing on the roads', () => {
-    for (const n of plates) {
-      for (const tree of n.layout.trees) {
-        const t = placed(n, tree)
+    for (const neighbourhood of plates) {
+      for (const tree of neighbourhood.layout.trees) {
+        const t = placed(neighbourhood, tree)
         expect(['road', 'island', 'path']).not.toContain(tileOf(t.x, t.z)?.kind)
       }
-      for (const s of n.layout.structures) {
-        const c = placed(n, s)
-        for (let dx = -(s.width - 1) / 2; dx <= (s.width - 1) / 2; dx++) {
-          for (let dz = -(s.depth - 1) / 2; dz <= (s.depth - 1) / 2; dz++) {
+      for (const structure of neighbourhood.layout.structures) {
+        const c = placed(neighbourhood, structure)
+        for (
+          let dx = -(structure.width - 1) / 2;
+          dx <= (structure.width - 1) / 2;
+          dx++
+        ) {
+          for (
+            let dz = -(structure.depth - 1) / 2;
+            dz <= (structure.depth - 1) / 2;
+            dz++
+          ) {
             expect(['road', 'island']).not.toContain(kindAt(c.x + dx, c.z + dz))
           }
         }
@@ -173,21 +193,23 @@ describe('the roads of the map', () => {
   })
 
   it('gives each neighbourhood the pieces of road that cross it, for its traffic', () => {
-    for (const n of world.neighbourhoods) {
-      for (const road of n.layout.roads) {
+    for (const neighbourhood of world.neighbourhoods) {
+      for (const road of neighbourhood.layout.roads) {
         expect(road.amplitude).toBe(0)
         expect(road.xMax).toBeGreaterThan(road.xMin)
         const [along, across] = road.vertical
-          ? [n.layout.halfDepth, n.layout.halfWidth]
-          : [n.layout.halfWidth, n.layout.halfDepth]
+          ? [neighbourhood.layout.halfDepth, neighbourhood.layout.halfWidth]
+          : [neighbourhood.layout.halfWidth, neighbourhood.layout.halfDepth]
         expect(Math.abs(road.z)).toBeLessThan(across)
         expect(road.xMin).toBeGreaterThanOrEqual(-along - 1e-6)
         expect(road.xMax).toBeLessThanOrEqual(along + 1e-6)
       }
     }
-    expect(plates.some((n) => n.layout.roads.some((r) => r.vertical))).toBe(
-      true,
-    )
+    expect(
+      plates.some((neighbourhood) =>
+        neighbourhood.layout.roads.some((road) => road.vertical),
+      ),
+    ).toBe(true)
   })
 })
 
@@ -215,10 +237,10 @@ describe('the paths', () => {
   })
 
   it('gathers the houses along the paths', () => {
-    const houses = plates.flatMap((n) =>
-      n.layout.structures
-        .filter((s) => s.kind === 'house')
-        .map((s) => placed(n, s)),
+    const houses = plates.flatMap((neighbourhood) =>
+      neighbourhood.layout.structures
+        .filter((structure) => structure.kind === 'house')
+        .map((structure) => placed(neighbourhood, structure)),
     )
     expect(houses.length).toBeGreaterThan(10)
     const byPath = houses.filter((h) =>
@@ -234,7 +256,9 @@ describe('the paths', () => {
     const byPath = monitored.filter((lot) => {
       const reach = lot.width / 2 + 0.6 + 1.5
       return paths.some(
-        (p) => Math.abs(p.x - lot.x) <= reach && Math.abs(p.z - lot.z) <= reach,
+        (tile) =>
+          Math.abs(tile.x - lot.x) <= reach &&
+          Math.abs(tile.z - lot.z) <= reach,
       )
     })
     expect(byPath.length).toBeGreaterThan(0)
@@ -242,12 +266,12 @@ describe('the paths', () => {
   })
 
   it('keeps every monitored building on a road', () => {
-    for (const n of world.neighbourhoods) {
-      for (const lot of n.layout.lots.filter((l) => !l.decor)) {
+    for (const neighbourhood of world.neighbourhoods) {
+      for (const lot of neighbourhood.layout.lots.filter((lot) => !lot.decor)) {
         const nearest = Math.min(
-          ...n.layout.roads
-            .filter((r) => !r.vertical)
-            .map((r) => Math.abs(lot.z - r.z)),
+          ...neighbourhood.layout.roads
+            .filter((road) => !road.vertical)
+            .map((road) => Math.abs(lot.z - road.z)),
         )
         expect(nearest).toBeLessThan(lot.width / 2 + 2.5)
       }
@@ -272,7 +296,9 @@ describe('the roads of a town', () => {
   it('has paths and houses along them in a city', () => {
     const layout = cityLayout(town, { main: 'city' })
     expect(layout.tiles.some((t) => t.kind === 'path')).toBe(true)
-    expect(layout.structures.some((s) => s.kind === 'house')).toBe(true)
+    expect(
+      layout.structures.some((structure) => structure.kind === 'house'),
+    ).toBe(true)
   })
 })
 

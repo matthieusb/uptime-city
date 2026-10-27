@@ -26,7 +26,7 @@ export function raindrops(cloud: Cloud): Drop[] {
   const count = DROPS[cloud.kind]
   if (count === 0) return []
   const random = seededRandom(hash(`rain:${cloud.lane}`))
-  const base = cloud.blocks.filter((b) => b.y === 0)
+  const base = cloud.blocks.filter((block) => block.y === 0)
   return Array.from({ length: count }, () => {
     const block = base[Math.floor(random() * base.length)]
     return {
@@ -102,8 +102,8 @@ export function boltPoints(
   fall: number,
 ): { x: number; y: number; z: number }[] {
   const random = seededRandom(hash(`bolt:${cloud.lane}:${strike}`))
-  const reachX = Math.max(...cloud.blocks.map((b) => Math.abs(b.x)))
-  const reachZ = Math.max(...cloud.blocks.map((b) => Math.abs(b.z)))
+  const reachX = Math.max(...cloud.blocks.map((block) => Math.abs(block.x)))
+  const reachZ = Math.max(...cloud.blocks.map((block) => Math.abs(block.z)))
   let x = (random() - 0.5) * reachX
   let z = (random() - 0.5) * reachZ
   return Array.from({ length: BOLT_SEGMENTS + 1 }, (_, i) => {

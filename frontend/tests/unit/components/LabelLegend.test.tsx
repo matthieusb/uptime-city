@@ -35,5 +35,9 @@ it('calls onToggle with the kind of the clicked label', async () => {
 
   await userEvent.click(screen.getByRole('checkbox', { name: /VM host/ }))
   expect(onToggle).toHaveBeenCalledWith('vm')
-  expect(LABEL_KINDS.map((l) => l.kind)).toEqual(['host', 'services', 'vm'])
+  expect(LABEL_KINDS.map((labelInfo) => labelInfo.kind)).toEqual([
+    'host',
+    'services',
+    'vm',
+  ])
 })

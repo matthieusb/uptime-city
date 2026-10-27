@@ -25,7 +25,7 @@ describe('fireStage', () => {
 
   it('gives each stage a color of its own, made once', () => {
     for (const stages of [FIRE_STAGES.fire, FIRE_STAGES.smoke]) {
-      expect(new Set(stages.map((c) => c.getHexString())).size).toBe(
+      expect(new Set(stages.map((color) => color.getHexString())).size).toBe(
         stages.length,
       )
     }

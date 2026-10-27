@@ -42,18 +42,18 @@ describe('blastCubes', () => {
       blast((i / 24) * PRELUDE_S),
     ).flat()
     expect(cubes.length).toBeGreaterThan(0)
-    for (const c of cubes) {
-      expect(Math.max(Math.abs(c.x), Math.abs(c.z))).toBeGreaterThanOrEqual(
-        WIDTH / 2 - 0.01,
-      )
-      expect(c.scale).toBeGreaterThanOrEqual(0)
+    for (const pose of cubes) {
+      expect(
+        Math.max(Math.abs(pose.x), Math.abs(pose.z)),
+      ).toBeGreaterThanOrEqual(WIDTH / 2 - 0.01)
+      expect(pose.scale).toBeGreaterThanOrEqual(0)
     }
   })
 
   it('climbs the building floor by floor, from its foot to its roof', () => {
     const mean = (elapsed: number) => {
       const cubes = blast(elapsed)
-      return cubes.reduce((sum, c) => sum + c.y, 0) / cubes.length
+      return cubes.reduce((sum, pose) => sum + pose.y, 0) / cubes.length
     }
     const means = [0.1, 0.35, 0.6, 0.85].map(mean)
     for (let i = 1; i < means.length; i++) {
@@ -65,7 +65,7 @@ describe('blastCubes', () => {
 
   it('ends with the roof bursting, above the top floor', () => {
     const cubes = blast(PRELUDE_S - 0.15)
-    expect(cubes.some((c) => c.y > HEIGHT)).toBe(true)
+    expect(cubes.some((pose) => pose.y > HEIGHT)).toBe(true)
   })
 
   it('never throws more cubes than it has room for, however tall the building', () => {
@@ -113,7 +113,7 @@ describe('smoke', () => {
     const early = puffsAt('a', 3.2, 0.1)
     const late = puffsAt('a', 3.2, 0.9)
     const mean = (poses: Pose[], key: 'y' | 'scale') =>
-      poses.reduce((sum, p) => sum + p[key], 0) / poses.length
+      poses.reduce((sum, pose) => sum + pose[key], 0) / poses.length
     expect(mean(late, 'y')).toBeGreaterThan(mean(early, 'y'))
     expect(mean(late, 'scale')).toBeGreaterThan(mean(early, 'scale'))
   })

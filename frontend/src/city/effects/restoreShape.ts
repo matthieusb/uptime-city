@@ -69,3 +69,10 @@ export function lotCollapse(
   const x = Math.min(1, Math.max(0, (elapsed - passTime(s, range)) / RISE_S))
   return 1 - x * x * (3 - 2 * x)
 }
+
+// How far the wave of the restoration has swept the middle of the tile, 0 to 1, from its start and
+// the time now, both in milliseconds: 0 without a restoration. What burns there goes out with it.
+export function sweptAt(restoredAt: number | null, now: number): number {
+  if (restoredAt === null) return 0
+  return Math.min(1, Math.max(0, (now - restoredAt) / 1000 / SWEEP_S))
+}

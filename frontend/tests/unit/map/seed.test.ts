@@ -41,8 +41,10 @@ describe('world seed', () => {
 
   it('keeps every neighbourhood and building whatever the seed', () => {
     setWorldSeed('other')
-    expect(worldLayout(specs).neighbourhoods.map((n) => n.id)).toEqual(
-      specs.map((s) => s.id),
-    )
+    expect(
+      worldLayout(specs).neighbourhoods.map(
+        (neighbourhood) => neighbourhood.id,
+      ),
+    ).toEqual(specs.map((neighbourhoodSpec) => neighbourhoodSpec.id))
   })
 })

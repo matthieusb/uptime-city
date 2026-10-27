@@ -22,9 +22,11 @@ const decodeSet =
       ? new Set(known.filter((kind) => raw.includes(kind)))
       : undefined
 
-export const decodeLabels = decodeSet<LabelKind>(LABEL_KINDS.map((l) => l.kind))
+export const decodeLabels = decodeSet<LabelKind>(
+  LABEL_KINDS.map((labelInfo) => labelInfo.kind),
+)
 export const decodeEffects = decodeSet<EffectKind>(
-  EFFECT_KINDS.map((e) => e.kind),
+  EFFECT_KINDS.map((effectInfo) => effectInfo.kind),
 )
 
 export function decodeDensities(raw: unknown): Densities | undefined {

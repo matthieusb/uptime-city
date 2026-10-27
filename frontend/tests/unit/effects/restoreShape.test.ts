@@ -8,6 +8,7 @@ import {
   passTime,
   sweepFront,
   sweepRange,
+  sweptAt,
   wavePlanes,
 } from '../../../src/city/effects/restoreShape'
 
@@ -41,8 +42,8 @@ describe('wavePlanes', () => {
       expect(distance).toBeCloseTo(7)
     }
     // All around: as many planes point left as right, and up as down.
-    expect(planes.reduce((n, p) => n + p.x, 0)).toBeCloseTo(0)
-    expect(planes.reduce((n, p) => n + p.z, 0)).toBeCloseTo(0)
+    expect(planes.reduce((n, wavePlane) => n + wavePlane.x, 0)).toBeCloseTo(0)
+    expect(planes.reduce((n, wavePlane) => n + wavePlane.z, 0)).toBeCloseTo(0)
   })
 })
 
@@ -87,5 +88,19 @@ describe('lotCollapse', () => {
   it('is all over before the end of the restoration', () => {
     expect(RESTORE_S).toBeGreaterThanOrEqual(SWEEP_S + RISE_S)
     expect(lotCollapse(range.max, RESTORE_S, range)).toBe(0)
+  })
+})
+
+describe('sweptAt', () => {
+  it('is 0 without a restoration and before it starts', () => {
+    expect(sweptAt(null, 9000)).toBe(0)
+    expect(sweptAt(1000, 500)).toBe(0)
+    expect(sweptAt(1000, 1000)).toBe(0)
+  })
+
+  it('goes to 1 as the wave sweeps the middle, and stays there', () => {
+    expect(sweptAt(1000, 1000 + (SWEEP_S * 1000) / 2)).toBeCloseTo(0.5, 9)
+    expect(sweptAt(1000, 1000 + SWEEP_S * 1000)).toBe(1)
+    expect(sweptAt(1000, 1000 + 60_000)).toBe(1)
   })
 })

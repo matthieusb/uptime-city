@@ -45,14 +45,15 @@ describe('cloudsFor', () => {
     expect(clouds.length).toBeGreaterThan(0)
     for (const cloud of clouds) {
       expect(cloud.blocks.length).toBeGreaterThan(30)
-      expect(cloud.blocks.some((b) => b.y === 0)).toBe(true)
-      const xs = cloud.blocks.map((b) => b.x)
+      expect(cloud.blocks.some((block) => block.y === 0)).toBe(true)
+      const xs = cloud.blocks.map((block) => block.x)
       expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(8)
     }
   })
 
   it('has fair, rainy and stormy clouds, the fair ones the most', () => {
-    const count = (kind: string) => clouds.filter((c) => c.kind === kind).length
+    const count = (kind: string) =>
+      clouds.filter((cloud) => cloud.kind === kind).length
     expect(count('rain')).toBeGreaterThan(0)
     expect(count('storm')).toBeGreaterThan(0)
     expect(count('fair')).toBeGreaterThanOrEqual(count('storm'))
@@ -76,7 +77,9 @@ describe('laneSpan', () => {
 
 describe('cloudPose', () => {
   const visible = (cloud: Cloud) =>
-    times.map((t) => cloudPose(cloud, t, bounds)).filter((p) => p.scale > 0)
+    times
+      .map((t) => cloudPose(cloud, t, bounds))
+      .filter((cloudPose) => cloudPose.scale > 0)
 
   it('only shows over the map, never past its edges', () => {
     for (const cloud of clouds) {
@@ -132,7 +135,7 @@ describe('cloudPose', () => {
   })
 
   it('does not start all the clouds together', () => {
-    const starts = clouds.map((c) => cloudPose(c, 0, bounds).scale)
+    const starts = clouds.map((cloud) => cloudPose(cloud, 0, bounds).scale)
     expect(new Set(starts.map((s) => s.toFixed(2))).size).toBeGreaterThan(1)
   })
 })

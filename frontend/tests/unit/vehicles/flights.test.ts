@@ -49,11 +49,11 @@ const LENGTHS = [14, 24, 30, 40]
 const STEP = 0.1
 
 // Plane `i` at each step of `cycles` cycles, in the frame of the airport.
-function* samples(s: AirportSpec, cycles = 2) {
-  const end = cycles * cycleOf(s)
+function* samples(airportSpec: AirportSpec, cycles = 2) {
+  const end = cycles * cycleOf(airportSpec)
   for (let t = 0; t < end; t += STEP) {
     for (let i = 0; i < MAX_PLANES; i++) {
-      yield { t, i, p: planeLocal(s, i, t) }
+      yield { t, i, p: planeLocal(airportSpec, i, t) }
     }
   }
 }
@@ -76,12 +76,12 @@ describe('planeCount', () => {
 describe('the schedule', () => {
   it('never has two planes on the runway at once', () => {
     for (const length of LENGTHS) {
-      const s = spec(length)
+      const airportSpec = spec(length)
       const half = length / 2
       let busy = 0
-      for (let t = 0; t < 4 * cycleOf(s); t += STEP) {
+      for (let t = 0; t < 4 * cycleOf(airportSpec); t += STEP) {
         const on = Array.from({ length: MAX_PLANES }, (_, i) =>
-          planeLocal(s, i, t),
+          planeLocal(airportSpec, i, t),
         ).filter(
           (p) =>
             p &&
@@ -97,12 +97,12 @@ describe('the schedule', () => {
   })
 
   it('has planes both landing and taking off, in both directions', () => {
-    const s = spec(24)
+    const airportSpec = spec(24)
     const landing = new Set<number>()
     const takeoff = new Set<number>()
     for (let c = 0; c < 6; c++) {
       for (let i = 0; i < MAX_PLANES; i++) {
-        const f = flightTimes(s, i, c)
+        const f = flightTimes(airportSpec, i, c)
         landing.add(f.landing)
         takeoff.add(f.takeoff)
       }
@@ -113,12 +113,12 @@ describe('the schedule', () => {
 
   it('keeps every plane of a cycle parked long enough, and gone before its next cycle', () => {
     for (const length of LENGTHS) {
-      const s = spec(length)
+      const airportSpec = spec(length)
       for (let i = 0; i < MAX_PLANES; i++) {
         for (let c = 0; c < 3; c++) {
-          const f = flightTimes(s, i, c)
+          const f = flightTimes(airportSpec, i, c)
           expect(f.turnStart).toBeGreaterThanOrEqual(f.arrivedAt)
-          expect(f.end).toBeLessThan(flightTimes(s, i, c + 1).start)
+          expect(f.end).toBeLessThan(flightTimes(airportSpec, i, c + 1).start)
         }
       }
     }
@@ -126,12 +126,12 @@ describe('the schedule', () => {
 
   it('never lets two planes meet on the ground, whatever their size', () => {
     for (const length of LENGTHS) {
-      const s = spec(length)
-      const radius = (k: PlaneKind) =>
-        Math.max(CRAFT[k].length, CRAFT[k].span) / 2
-      for (let t = 0; t < 4 * cycleOf(s); t += STEP) {
+      const airportSpec = spec(length)
+      const radius = (planeKind: PlaneKind) =>
+        Math.max(CRAFT[planeKind].length, CRAFT[planeKind].span) / 2
+      for (let t = 0; t < 4 * cycleOf(airportSpec); t += STEP) {
         const ground = Array.from({ length: MAX_PLANES }, (_, i) =>
-          planeLocal(s, i, t),
+          planeLocal(airportSpec, i, t),
         ).filter((p) => p && p.y < 0.2)
         for (const a of ground) {
           for (const b of ground) {
@@ -147,10 +147,10 @@ describe('the schedule', () => {
   })
 
   it('parks the planes on distinct stands', () => {
-    const s = spec(30)
-    for (let t = 0; t < 2 * cycleOf(s); t += 1) {
+    const airportSpec = spec(30)
+    for (let t = 0; t < 2 * cycleOf(airportSpec); t += 1) {
       const parked = Array.from({ length: MAX_PLANES }, (_, i) =>
-        planeLocal(s, i, t),
+        planeLocal(airportSpec, i, t),
       ).filter((p) => p && p.y === 0 && Math.abs(p.z - STAND_Z) < 0.01)
       const xs = parked.map((p) => Math.round(p!.x))
       expect(new Set(xs).size).toBe(xs.length)
@@ -170,13 +170,13 @@ describe('planes', () => {
   it('appear outside an edge of the map and disappear beyond an edge', () => {
     const reach = { pos: 60, neg: 90 }
     for (const length of LENGTHS) {
-      const s = spec(length, reach)
+      const airportSpec = spec(length, reach)
       let appeared = 0
       let gone = 0
       for (let i = 0; i < MAX_PLANES; i++) {
-        let before = planeLocal(s, i, 0)
-        for (let t = STEP; t < 2 * cycleOf(s); t += STEP) {
-          const now = planeLocal(s, i, t)
+        let before = planeLocal(airportSpec, i, 0)
+        for (let t = STEP; t < 2 * cycleOf(airportSpec); t += STEP) {
+          const now = planeLocal(airportSpec, i, t)
           if (!before && now) {
             appeared++
             expect(now.x > reach.pos || now.x < -reach.neg).toBe(true)
@@ -196,11 +196,11 @@ describe('planes', () => {
   })
 
   it('come in from and leave by both edges along the runway', () => {
-    const s = spec(24)
+    const airportSpec = spec(24)
     const entered = new Set<string>()
     const left = new Set<string>()
-    for (const { i, t, p } of samples(s, 6)) {
-      const before = planeLocal(s, i, t - STEP)
+    for (const { i, t, p } of samples(airportSpec, 6)) {
+      const before = planeLocal(airportSpec, i, t - STEP)
       if (!before && p) entered.add(p.x > 0 ? 'pos' : 'neg')
       if (before && !p) left.add(before.x > 0 ? 'pos' : 'neg')
     }
@@ -210,11 +210,11 @@ describe('planes', () => {
 
   it('move continuously: no jump of place, heading or pitch', () => {
     for (const length of LENGTHS) {
-      const s = spec(length)
+      const airportSpec = spec(length)
       for (let i = 0; i < MAX_PLANES; i++) {
-        let before = planeLocal(s, i, 0)
-        for (let t = STEP; t < 2 * cycleOf(s); t += STEP) {
-          const now = planeLocal(s, i, t)
+        let before = planeLocal(airportSpec, i, 0)
+        for (let t = STEP; t < 2 * cycleOf(airportSpec); t += STEP) {
+          const now = planeLocal(airportSpec, i, t)
           if (before && now) {
             // At most about 8 tiles per second.
             expect(
@@ -235,9 +235,9 @@ describe('planes', () => {
   })
 
   it('land on and take off from the runway, level on the ground', () => {
-    const s = spec(24)
+    const airportSpec = spec(24)
     let onRunway = 0
-    for (const { p } of samples(s)) {
+    for (const { p } of samples(airportSpec)) {
       if (!p) continue
       if (p.y === 0) expect(p.pitch).toBe(0)
       if (p.y === 0 && Math.abs(p.z - RUNWAY_Z) < 0.05) onRunway++
@@ -251,13 +251,13 @@ describe('planes', () => {
   it('climb above the clouds before they leave, and come down from above them', () => {
     const clouds = 6 + CLOUD_THICKNESS
     for (const length of LENGTHS) {
-      const s = spec(length, { pos: 120, neg: 120 })
+      const airportSpec = spec(length, { pos: 120, neg: 120 })
       let highest = 0
       let arrivedHigh = 0
-      for (const { t, i, p } of samples(s, 2)) {
+      for (const { t, i, p } of samples(airportSpec, 2)) {
         if (!p) continue
         highest = Math.max(highest, p.y)
-        const before = planeLocal(s, i, t - STEP)
+        const before = planeLocal(airportSpec, i, t - STEP)
         if (!before && p.y > clouds) arrivedHigh++
       }
       expect(highest, `length ${length}`).toBeGreaterThan(clouds + 1)
@@ -282,8 +282,8 @@ describe('planes', () => {
   })
 
   it('are all inactive when out of their cycle', () => {
-    const s = spec(24)
-    const idle = planeState(s, 0, -1e6)
+    const airportSpec = spec(24)
+    const idle = planeState(airportSpec, 0, -1e6)
     expect(idle.active).toBe(false)
   })
 })
@@ -352,7 +352,7 @@ describe('the kinds of plane', () => {
   })
 
   it('makes the bigger planes faster, with a longer roll and a gentler climb', () => {
-    const [a, b, c] = PLANE_KINDS.map((k) => CRAFT[k])
+    const [a, b, c] = PLANE_KINDS.map((planeKind) => CRAFT[planeKind])
     for (const [small, big] of [
       [a, b],
       [b, c],
@@ -366,17 +366,17 @@ describe('the kinds of plane', () => {
   })
 
   it('fits the stands, the taxiway and the airport', () => {
-    for (const k of PLANE_KINDS) {
+    for (const planeKind of PLANE_KINDS) {
       // Stands are 5 apart, and the taxiway is 4.3 from the nose of a parked plane.
-      expect(CRAFT[k].span).toBeLessThan(5)
-      expect(CRAFT[k].length).toBeLessThan(4.3)
+      expect(CRAFT[planeKind].span).toBeLessThan(5)
+      expect(CRAFT[planeKind].length).toBeLessThan(4.3)
     }
     for (const length of LENGTHS) {
-      const s = spec(length)
-      const half = s.layout.width / 2
-      for (let t = 0; t < 4 * cycleOf(s); t += STEP * 3) {
+      const airportSpec = spec(length)
+      const half = airportSpec.layout.width / 2
+      for (let t = 0; t < 4 * cycleOf(airportSpec); t += STEP * 3) {
         for (let i = 0; i < MAX_PLANES; i++) {
-          const p = planeLocal(s, i, t)
+          const p = planeLocal(airportSpec, i, t)
           if (!p || p.y > 0.2) continue
           // On the ground, within the airport, wings and all.
           const r = Math.max(CRAFT[p.kind].length, CRAFT[p.kind].span) / 2
@@ -389,12 +389,12 @@ describe('the kinds of plane', () => {
   })
 
   it('has every kind fly, and each leave and enter beyond an edge', () => {
-    const s = spec(40, { pos: 60, neg: 90 })
+    const airportSpec = spec(40, { pos: 60, neg: 90 })
     const seen = new Set<PlaneKind>()
     for (let i = 0; i < MAX_PLANES; i++) {
-      let before = planeLocal(s, i, 0)
-      for (let t = STEP; t < 6 * cycleOf(s); t += STEP) {
-        const now = planeLocal(s, i, t)
+      let before = planeLocal(airportSpec, i, 0)
+      for (let t = STEP; t < 6 * cycleOf(airportSpec); t += STEP) {
+        const now = planeLocal(airportSpec, i, t)
         if (now) seen.add(now.kind)
         if (!before && now) expect(now.x > 60 || now.x < -90).toBe(true)
         if (before && !now) {

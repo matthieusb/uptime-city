@@ -51,7 +51,8 @@ function outside(
 }
 
 const unit = (text: string) => (hash(text) % 10000) / 10000
-const slowest = Math.min(...PLANE_KINDS.map((k) => CRAFT[k].vFly)) * SPEED
+const slowest =
+  Math.min(...PLANE_KINDS.map((planeKind) => CRAFT[planeKind].vFly)) * SPEED
 
 // Seconds of the cycle of plane `i`: the longest crossing of the map (corner to corner) at the
 // slowest speed, plus a pause.
@@ -65,11 +66,14 @@ export function overflightCycle(bounds: SkyBounds, i: number): number {
 
 // The kind of the flight, by hash, with the weights of the kinds of plane.
 function kindOf(i: number, c: number): PlaneKind {
-  const total = PLANE_KINDS.reduce((sum, k) => sum + CRAFT[k].weight, 0)
+  const total = PLANE_KINDS.reduce(
+    (sum, planeKind) => sum + CRAFT[planeKind].weight,
+    0,
+  )
   let roll = hash(`sky:${i}:${c}:kind`) % total
-  for (const k of PLANE_KINDS) {
-    roll -= CRAFT[k].weight
-    if (roll < 0) return k
+  for (const planeKind of PLANE_KINDS) {
+    roll -= CRAFT[planeKind].weight
+    if (roll < 0) return planeKind
   }
   return PLANE_KINDS[0]
 }

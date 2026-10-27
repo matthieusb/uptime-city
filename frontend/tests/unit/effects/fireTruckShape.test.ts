@@ -84,7 +84,7 @@ describe('fireTrucks', () => {
   it('puts the trucks of a building on different sides', () => {
     const spots = Array.from({ length: MAX_TRUCKS }, (_, slot) =>
       parking(slot, 4),
-    ).map((p) => `${p.nx},${p.nz}`)
+    ).map((parking) => `${parking.nx},${parking.nz}`)
     expect(new Set(spots).size).toBe(MAX_TRUCKS)
   })
 })
@@ -226,9 +226,9 @@ describe('approachOf', () => {
   })
 
   it('starts and ends at the ring of a roundabout, not on its island', () => {
-    const a = approachOf(ways, [{ x: 20, z: 10 }], { x: 40, z: 7.8 }, 3)!
-    expect(a.before).toBeCloseTo(40 - 20 - 3)
-    expect(a.after).toBeCloseTo(60)
+    const approach = approachOf(ways, [{ x: 20, z: 10 }], { x: 40, z: 7.8 }, 3)!
+    expect(approach.before).toBeCloseTo(40 - 20 - 3)
+    expect(approach.after).toBeCloseTo(60)
   })
 
   it('finds no road for a building that is far from every one', () => {
@@ -238,13 +238,13 @@ describe('approachOf', () => {
   })
 
   it('parks abreast of the building, on the lane, side by side along the road', () => {
-    const a = approachOf(ways, [], { x: 40, z: 7.8 }, 3)!
-    const spot = roadParking(a, 0)
+    const approach = approachOf(ways, [], { x: 40, z: 7.8 }, 3)!
+    const spot = roadParking(approach, 0)
     expect([spot.nx, spot.nz]).toEqual([0, 1])
     expect(spot.dx).toBe(1)
     expect(spot.dz).toBeCloseTo(0)
-    expect(spot.z).toBeCloseTo(a.away)
-    expect(roadParking(a, 2.5).x).toBeCloseTo(2.5)
+    expect(spot.z).toBeCloseTo(approach.away)
+    expect(roadParking(approach, 2.5).x).toBeCloseTo(2.5)
   })
 })
 

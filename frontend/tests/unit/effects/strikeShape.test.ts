@@ -9,7 +9,8 @@ import {
   growthAt,
   missileAt,
   missileBoxes,
-  puffGrowth,
+  flashSize,
+  sinceImpact,
   trailPuff,
   trailSeeds,
 } from '../../../src/city/effects/strikeShape'
@@ -81,9 +82,9 @@ describe('courseFor', () => {
   })
 
   it('always starts outside the map, never from a tile', () => {
-    courses.forEach((c, i) => {
-      const x = plates[i % 4].x + c.x
-      const z = plates[i % 4].z + c.z
+    courses.forEach((course, i) => {
+      const x = plates[i % 4].x + course.x
+      const z = plates[i % 4].z + course.z
       expect(Math.abs(x) > map.halfWidth || Math.abs(z) > map.halfDepth).toBe(
         true,
       )
@@ -91,8 +92,8 @@ describe('courseFor', () => {
   })
 
   it('comes from another side one time out of three', () => {
-    const left = courses.filter((c) => {
-      const [dx, dz] = [c.x, c.z].map((n) => Math.sign(n))
+    const left = courses.filter((course) => {
+      const [dx, dz] = [course.x, course.z].map((n) => Math.sign(n))
       return dx === -1 && dz === 1
     })
     const other = courses.length - left.length
@@ -102,7 +103,7 @@ describe('courseFor', () => {
 
   it('uses every side', () => {
     const sides = new Set(
-      courses.map((c) => `${Math.sign(c.x)},${Math.sign(c.z)}`),
+      courses.map((course) => `${Math.sign(course.x)},${Math.sign(course.z)}`),
     )
     expect(sides.size).toBe(4)
   })
@@ -126,9 +127,11 @@ describe('missileBoxes', () => {
   it('is a voxel rocket with a red nose below its body', () => {
     const boxes = missileBoxes()
     expect(boxes.length).toBeGreaterThan(6)
-    const nose = boxes.filter((b) => b.color === '#d62828')
-    const lowestNose = Math.min(...nose.map((b) => b.y))
-    expect(lowestNose).toBeLessThan(Math.min(...boxes.map((b) => b.y)) + 0.01)
+    const nose = boxes.filter((missileBox) => missileBox.color === '#d62828')
+    const lowestNose = Math.min(...nose.map((missileBox) => missileBox.y))
+    expect(lowestNose).toBeLessThan(
+      Math.min(...boxes.map((missileBox) => missileBox.y)) + 0.01,
+    )
   })
 })
 
@@ -137,8 +140,10 @@ describe('trail', () => {
 
   it('is the same every time, emitted all along the fall', () => {
     expect(trailSeeds()).toEqual(seeds)
-    expect(Math.min(...seeds.map((s) => s.emit))).toBe(0)
-    expect(Math.max(...seeds.map((s) => s.emit))).toBeLessThanOrEqual(MISSILE_S)
+    expect(Math.min(...seeds.map((trailSeed) => trailSeed.emit))).toBe(0)
+    expect(
+      Math.max(...seeds.map((trailSeed) => trailSeed.emit)),
+    ).toBeLessThanOrEqual(MISSILE_S)
   })
 
   it('has no puff before it is emitted nor after it is gone', () => {
@@ -184,10 +189,17 @@ describe('strike timeline', () => {
     expect(growthAt(null, 5)).toBe(1)
   })
 
-  it('shows the foot of the cloud before its top', () => {
-    expect(puffGrowth(0, 0.3)).toBeGreaterThan(puffGrowth(1, 0.3))
-    expect(puffGrowth(1, 0)).toBe(0)
-    expect(puffGrowth(1, 1)).toBe(1)
-    expect(puffGrowth(0, 1)).toBe(1)
+  it('swells the flash as it fades', () => {
+    expect(flashSize(1)).toBeGreaterThan(0)
+    expect(flashSize(0)).toBeGreaterThan(flashSize(1))
+    expect(flashSize(0.5)).toBeGreaterThan(flashSize(1))
+    expect(flashSize(0.5)).toBeLessThan(flashSize(0))
+  })
+
+  it('counts the seconds since the impact, and has long burnt for a tile nuked from the start', () => {
+    expect(sinceImpact(1000, 1000 + MISSILE_S * 1000)).toBeCloseTo(0, 9)
+    expect(sinceImpact(1000, 1000 + (MISSILE_S + 2) * 1000)).toBeCloseTo(2, 9)
+    expect(sinceImpact(1000, 1000)).toBeCloseTo(-MISSILE_S, 9)
+    expect(sinceImpact(null, 5000)).toBe(Infinity)
   })
 })

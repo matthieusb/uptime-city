@@ -7,5 +7,7 @@ export const setWorldSeed = (next: string) => {
   seed = next
 }
 
+export const worldSeed = () => seed
+
 // The text a draw hashes, tied to the seed.
 export const seeded = (text: string) => (seed ? `${seed}|${text}` : text)

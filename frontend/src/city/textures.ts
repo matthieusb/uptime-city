@@ -142,7 +142,7 @@ export function labelTexture(
   const textWidth = Math.ceil(ctx.measureText(text).width / LABEL_SCALE)
   ctx.font = badgeFont
   const badgeWidths = badges.map(
-    (b) => Math.ceil(ctx.measureText(b.text).width / LABEL_SCALE) + 6,
+    (badge) => Math.ceil(ctx.measureText(badge.text).width / LABEL_SCALE) + 6,
   )
   const gap = (first: boolean) => (first && !text ? 0 : BADGE_GAP_PX)
   const width =
@@ -153,7 +153,7 @@ export function labelTexture(
   canvas.width = width * LABEL_SCALE
   canvas.height = height * LABEL_SCALE
   // The breathing badges are on a layer of their own, to fade it alone.
-  const layer = badges.some((b) => b.pulse)
+  const layer = badges.some((badge) => badge.pulse)
     ? document.createElement('canvas')
     : null
   if (layer) {
@@ -172,12 +172,12 @@ export function labelTexture(
   ctx.textBaseline = 'middle'
   ctx.fillText(text, LABEL_PADDING_PX * LABEL_SCALE, canvas.height / 2)
   let at = LABEL_PADDING_PX + textWidth
-  badges.forEach((b, i) => {
+  badges.forEach((badge, i) => {
     at += gap(i === 0)
     const x = at * LABEL_SCALE
     const badgeHeight = (BADGE_FONT_PX + 4) * LABEL_SCALE
-    const draw = (b.pulse && layer?.getContext('2d')) || ctx
-    draw.fillStyle = b.color
+    const draw = (badge.pulse && layer?.getContext('2d')) || ctx
+    draw.fillStyle = badge.color
     draw.beginPath()
     draw.roundRect(
       x,
@@ -188,11 +188,11 @@ export function labelTexture(
     )
     draw.fill()
     draw.font = badgeFont
-    draw.fillStyle = b.textColor ?? '#0f1115'
+    draw.fillStyle = badge.textColor ?? '#0f1115'
     draw.textAlign = 'center'
     draw.textBaseline = 'middle'
     draw.fillText(
-      b.text,
+      badge.text,
       x + (badgeWidths[i] * LABEL_SCALE) / 2,
       canvas.height / 2 + 1,
     )

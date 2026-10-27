@@ -1,6 +1,6 @@
 import pytest
 
-from tests.helpers import make_client
+from tests.api.helpers import make_client
 
 
 def test_health() -> None:

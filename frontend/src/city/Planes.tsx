@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { MeshLambertMaterial, type Group } from 'three'
+import { MeshLambertMaterial, type Group, type Quaternion } from 'three'
 import type { Airport } from './airport'
 import {
   LIVERIES,
@@ -123,22 +123,26 @@ const PARTS: Record<PlaneKind, Part[]> = {
 
 type Materials = Record<Tone, MeshLambertMaterial>
 
-function useMaterials(count: number): Materials[] {
-  const all = useMemo(
-    () =>
-      Array.from({ length: count }, (): Materials => ({
-        body: new MeshLambertMaterial({ color: TOURISM[0][0] }),
-        accent: new MeshLambertMaterial({ color: TOURISM[0][1] }),
-        wing: new MeshLambertMaterial({ color: '#c9ced6' }),
-        glass: new MeshLambertMaterial({ color: '#9fd3ff' }),
-        dark: new MeshLambertMaterial({ color: '#2b2d33' }),
-      })),
-    [count],
-  )
+function useMaterials(count: number, free: boolean): Materials[] {
+  const all = useMemo(() => {
+    // On the planet, the planes of the sky are placed on the planet itself: no bending.
+    const make = (color: string) => {
+      const material = new MeshLambertMaterial({ color })
+      if (free) material.defines = { PLANET_FREE: '' }
+      return material
+    }
+    return Array.from({ length: count }, (): Materials => ({
+      body: make(TOURISM[0][0]),
+      accent: make(TOURISM[0][1]),
+      wing: make('#c9ced6'),
+      glass: make('#9fd3ff'),
+      dark: make('#2b2d33'),
+    }))
+  }, [count, free])
   useEffect(
     () => () => {
-      for (const m of all)
-        for (const material of Object.values(m)) material.dispose()
+      for (const materials of all)
+        for (const material of Object.values(materials)) material.dispose()
     },
     [all],
   )
@@ -147,17 +151,23 @@ function useMaterials(count: number): Materials[] {
 
 // A pool of `count` planes, each in a group of its own that is placed, turned and dressed in the
 // livery and the model of its kind: shared by the planes of the airport and those of the sky.
-export function usePlanePool(count = MAX_PLANES): {
+export function usePlanePool(
+  count = MAX_PLANES,
+  // Whether they fly in the frame of the planet, out of the atlas that is bent onto it.
+  free = false,
+): {
   // Puts plane `i` at (x, y, z), scaled by `k`, as `state` says; or hides it, with no state.
   place: (
     i: number,
     state: PlaneState | null,
     at: [number, number, number],
     k: number,
+    // Turns the plane as a whole, after its heading and pitch: on the planet, where up is not Y.
+    frame?: Quaternion,
   ) => void
   bodies: ReactNode
 } {
-  const materials = useMaterials(count)
+  const materials = useMaterials(count, free)
   const nodes = useRef<(Group | null)[]>([])
   // The model of each kind inside each plane's group, and the look it has now.
   const models = useRef<Partial<Record<PlaneKind, Group | null>>[]>([])
@@ -168,6 +178,7 @@ export function usePlanePool(count = MAX_PLANES): {
     state: PlaneState | null,
     at: [number, number, number],
     k: number,
+    frame?: Quaternion,
   ) => {
     const node = nodes.current[i]
     if (!node) return
@@ -179,6 +190,7 @@ export function usePlanePool(count = MAX_PLANES): {
     node.position.set(...at)
     node.scale.setScalar(k)
     node.rotation.set(0, state.heading, state.pitch)
+    if (frame) node.quaternion.premultiply(frame)
     const look = `${state.kind}:${state.livery}`
     if (looks.current[i] !== look) {
       looks.current[i] = look
@@ -192,7 +204,7 @@ export function usePlanePool(count = MAX_PLANES): {
     }
   }
 
-  const bodies = materials.map((m, i) => (
+  const bodies = materials.map((materials, i) => (
     <group
       key={i}
       ref={(node) => {
@@ -208,9 +220,14 @@ export function usePlanePool(count = MAX_PLANES): {
           }}
           visible={kind === 'tourism'}
         >
-          {PARTS[kind].map((p, n) => (
-            <mesh key={n} position={p.at} castShadow material={m[p.tone]}>
-              <boxGeometry args={p.size} />
+          {PARTS[kind].map((part, n) => (
+            <mesh
+              key={n}
+              position={part.at}
+              castShadow={!free}
+              material={materials[part.tone]}
+            >
+              <boxGeometry args={part.size} />
             </mesh>
           ))}
         </group>

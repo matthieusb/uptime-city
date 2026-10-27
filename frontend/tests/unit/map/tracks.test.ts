@@ -40,12 +40,12 @@ describe.each(Object.entries(worlds))('the railway of %s', (_, specs) => {
   const key = (x: number, z: number) =>
     `${Math.round(2 * x)},${Math.round(2 * z)}`
   const ground = new Map<string, Tile>()
-  for (const n of plates) {
-    for (const t of n.layout.tiles) {
-      ground.set(key(n.x + t.x, n.z + t.z), {
+  for (const neighbourhood of plates) {
+    for (const t of neighbourhood.layout.tiles) {
+      ground.set(key(neighbourhood.x + t.x, neighbourhood.z + t.z), {
         ...t,
-        x: n.x + t.x,
-        z: n.z + t.z,
+        x: neighbourhood.x + t.x,
+        z: neighbourhood.z + t.z,
       })
     }
   }
@@ -96,10 +96,13 @@ describe.each(Object.entries(worlds))('the railway of %s', (_, specs) => {
   })
 
   it('never goes over a monitored building, nor next to its square', () => {
-    for (const n of world.neighbourhoods) {
-      for (const lot of n.layout.lots) {
+    for (const neighbourhood of world.neighbourhoods) {
+      for (const lot of neighbourhood.layout.lots) {
         const half = lot.width / 2 + 0.6
-        const centre = across({ x: n.x + lot.x, z: n.z + lot.z })
+        const centre = across({
+          x: neighbourhood.x + lot.x,
+          z: neighbourhood.z + lot.z,
+        })
         expect(Math.abs(centre - track.at)).toBeGreaterThanOrEqual(
           half + CORRIDOR / 2,
         )
@@ -131,19 +134,28 @@ describe.each(Object.entries(worlds))('the railway of %s', (_, specs) => {
   it('removes the trees, structures and hills on it', () => {
     // The tile a point stands on: tiles are on one lattice.
     const [fx, fz] = [tiles[0].x, tiles[0].z].map((v) => v - Math.floor(v))
-    const onTrack = (n: Neighbourhood, p: { x: number; z: number }) => {
-      const [x, z] = [n.x + p.x, n.z + p.z]
+    const onTrack = (
+      neighbourhood: Neighbourhood,
+      p: { x: number; z: number },
+    ) => {
+      const [x, z] = [neighbourhood.x + p.x, neighbourhood.z + p.z]
       const tile = track.vertical
         ? fx + Math.round(x - fx)
         : fz + Math.round(z - fz)
       return Math.abs(tile - track.at) < CORRIDOR / 2
     }
-    for (const n of plates) {
-      for (const tree of n.layout.trees) expect(onTrack(n, tree)).toBe(false)
-      for (const s of n.layout.structures) {
-        const reach = (track.vertical ? s.width : s.depth) / 2
+    for (const neighbourhood of plates) {
+      for (const tree of neighbourhood.layout.trees)
+        expect(onTrack(neighbourhood, tree)).toBe(false)
+      for (const structure of neighbourhood.layout.structures) {
+        const reach = (track.vertical ? structure.width : structure.depth) / 2
         expect(
-          Math.abs(across({ x: n.x + s.x, z: n.z + s.z }) - track.at),
+          Math.abs(
+            across({
+              x: neighbourhood.x + structure.x,
+              z: neighbourhood.z + structure.z,
+            }) - track.at,
+          ),
         ).toBeGreaterThanOrEqual(CORRIDOR / 2 + reach - 1e-6)
       }
     }
@@ -155,16 +167,16 @@ describe.each(Object.entries(worlds))('the railway of %s', (_, specs) => {
   })
 
   it('gives each plate it crosses its part, relative to the plate', () => {
-    for (const n of plates) {
+    for (const neighbourhood of plates) {
       const [centre, half] = track.vertical
-        ? [n.x, n.layout.halfWidth]
-        : [n.z, n.layout.halfDepth]
+        ? [neighbourhood.x, neighbourhood.layout.halfWidth]
+        : [neighbourhood.z, neighbourhood.layout.halfDepth]
       const [alongHalf] = track.vertical
-        ? [n.layout.halfDepth]
-        : [n.layout.halfWidth]
+        ? [neighbourhood.layout.halfDepth]
+        : [neighbourhood.layout.halfWidth]
       const crossed = Math.abs(track.at - centre) < half + CORRIDOR / 2
-      expect(n.layout.tracks.length).toBe(crossed ? 1 : 0)
-      for (const piece of n.layout.tracks) {
+      expect(neighbourhood.layout.tracks.length).toBe(crossed ? 1 : 0)
+      for (const piece of neighbourhood.layout.tracks) {
         expect(piece.vertical).toBe(track.vertical)
         expect(piece.at).toBeCloseTo(track.at - centre)
         expect(piece.from).toBeCloseTo(-alongHalf)
@@ -173,16 +185,21 @@ describe.each(Object.entries(worlds))('the railway of %s', (_, specs) => {
     }
     // Together, the pieces make the whole length.
     const covered = plates
-      .filter((n) => n.layout.tracks.length)
+      .filter((neighbourhood) => neighbourhood.layout.tracks.length)
       .reduce(
-        (sum, n) => sum + n.layout.tracks[0].to - n.layout.tracks[0].from,
+        (sum, neighbourhood) =>
+          sum +
+          neighbourhood.layout.tracks[0].to -
+          neighbourhood.layout.tracks[0].from,
         0,
       )
     expect(covered).toBeGreaterThanOrEqual(track.to - track.from - 1e-6)
   })
 
   it('is drawn with its plate and is gone on a nuked plate', () => {
-    const [crossed] = plates.filter((n) => n.layout.tracks.length)
+    const [crossed] = plates.filter(
+      (neighbourhood) => neighbourhood.layout.tracks.length,
+    )
     const boxes = trackBoxes(
       crossed.layout.tracks,
       crossed.layout.halfWidth,

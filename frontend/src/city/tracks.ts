@@ -81,9 +81,9 @@ export function layTracks(world: World): World {
   const cellKey = (x: number, z: number) => key(ix(x), iz(z))
 
   const cells = new Map<string, Cell>()
-  for (const n of plates) {
-    for (const t of n.layout.tiles) {
-      cells.set(cellKey(n.x + t.x, n.z + t.z), {
+  for (const neighbourhood of plates) {
+    for (const t of neighbourhood.layout.tiles) {
+      cells.set(cellKey(neighbourhood.x + t.x, neighbourhood.z + t.z), {
         kind: t.kind,
         cost: KIND_COST[t.kind] ?? 0,
         hard: SEA.has(t.kind) || t.kind === 'island',
@@ -104,14 +104,15 @@ export function layTracks(world: World): World {
     const cell = cells.get(cellKey(x, z))
     if (cell) cell.cost += cost
   }
-  for (const n of plates) {
-    for (const t of n.layout.trees) price(n.x + t.x, n.z + t.z, COST_TREE)
-    for (const s of n.layout.structures) {
-      for (let di = 0; di < s.width; di++) {
-        for (let dj = 0; dj < s.depth; dj++) {
+  for (const neighbourhood of plates) {
+    for (const t of neighbourhood.layout.trees)
+      price(neighbourhood.x + t.x, neighbourhood.z + t.z, COST_TREE)
+    for (const structure of neighbourhood.layout.structures) {
+      for (let di = 0; di < structure.width; di++) {
+        for (let dj = 0; dj < structure.depth; dj++) {
           price(
-            n.x + s.x - (s.width - 1) / 2 + di,
-            n.z + s.z - (s.depth - 1) / 2 + dj,
+            neighbourhood.x + structure.x - (structure.width - 1) / 2 + di,
+            neighbourhood.z + structure.z - (structure.depth - 1) / 2 + dj,
             COST_STRUCTURE,
           )
         }
@@ -131,14 +132,14 @@ export function layTracks(world: World): World {
       }
     }
   }
-  for (const n of world.neighbourhoods) {
-    for (const l of n.layout.lots) {
-      const half = l.width / 2 + PLAZA_MARGIN + 1
+  for (const neighbourhood of world.neighbourhoods) {
+    for (const lot of neighbourhood.layout.lots) {
+      const half = lot.width / 2 + PLAZA_MARGIN + 1
       forbid(
-        n.x + l.x - half,
-        n.x + l.x + half,
-        n.z + l.z - half,
-        n.z + l.z + half,
+        neighbourhood.x + lot.x - half,
+        neighbourhood.x + lot.x + half,
+        neighbourhood.z + lot.z - half,
+        neighbourhood.z + lot.z + half,
       )
     }
   }
@@ -222,11 +223,11 @@ export function layTracks(world: World): World {
   const besideTrack = (x: number, z: number) =>
     Math.abs((vertical ? x : z) - centre) < half + 1
 
-  const lay = (n: Neighbourhood): Neighbourhood => {
+  const lay = (neighbourhood: Neighbourhood): Neighbourhood => {
     const painted = new Set<string>()
     const levelled = new Set<string>()
-    const tiles = n.layout.tiles.map((t): Tile => {
-      const [x, z] = [n.x + t.x, n.z + t.z]
+    const tiles = neighbourhood.layout.tiles.map((t): Tile => {
+      const [x, z] = [neighbourhood.x + t.x, neighbourhood.z + t.z]
       if (onTrack(x, z) && t.kind !== 'road') {
         painted.add(cellKey(x, z))
         return { ...t, kind: 'track', top: ROAD_TOP }
@@ -238,7 +239,7 @@ export function layTracks(world: World): World {
       return t
     })
     const gone = (p: { x: number; z: number }) => {
-      const id = cellKey(n.x + p.x, n.z + p.z)
+      const id = cellKey(neighbourhood.x + p.x, neighbourhood.z + p.z)
       return painted.has(id) || levelled.has(id)
     }
     const crossed = (s: {
@@ -251,8 +252,8 @@ export function layTracks(world: World): World {
         [...Array(s.depth).keys()].some((dj) =>
           painted.has(
             cellKey(
-              n.x + s.x - (s.width - 1) / 2 + di,
-              n.z + s.z - (s.depth - 1) / 2 + dj,
+              neighbourhood.x + s.x - (s.width - 1) / 2 + di,
+              neighbourhood.z + s.z - (s.depth - 1) / 2 + dj,
             ),
           ),
         ),
@@ -260,21 +261,36 @@ export function layTracks(world: World): World {
     // The railway through a tennis club takes the whole club.
     const club = (s: { kind: string }) =>
       s.kind === 'tennis' || s.kind === 'clubhouse'
-    const clubCrossed = n.layout.structures.some((s) => club(s) && crossed(s))
-    const goes = (s: (typeof n.layout.structures)[number]) =>
-      crossed(s) || (clubCrossed && club(s))
-    const structures = n.layout.structures.filter((s) => !goes(s))
-    const removed = n.layout.structures.filter(goes)
+    const clubCrossed = neighbourhood.layout.structures.some(
+      (structure) => club(structure) && crossed(structure),
+    )
+    const goes = (
+      structure: (typeof neighbourhood.layout.structures)[number],
+    ) => crossed(structure) || (clubCrossed && club(structure))
+    const structures = neighbourhood.layout.structures.filter(
+      (structure) => !goes(structure),
+    )
+    const removed = neighbourhood.layout.structures.filter(goes)
     const under = (t: Tile) =>
       removed.some(
-        (s) =>
-          Math.abs(t.x - s.x) < s.width / 2 &&
-          Math.abs(t.z - s.z) < s.depth / 2,
+        (structure) =>
+          Math.abs(t.x - structure.x) < structure.width / 2 &&
+          Math.abs(t.z - structure.z) < structure.depth / 2,
       )
 
     const [halfAlong, halfAcross, alongAt, acrossAt] = vertical
-      ? [n.layout.halfDepth, n.layout.halfWidth, n.z, n.x]
-      : [n.layout.halfWidth, n.layout.halfDepth, n.x, n.z]
+      ? [
+          neighbourhood.layout.halfDepth,
+          neighbourhood.layout.halfWidth,
+          neighbourhood.z,
+          neighbourhood.x,
+        ]
+      : [
+          neighbourhood.layout.halfWidth,
+          neighbourhood.layout.halfDepth,
+          neighbourhood.x,
+          neighbourhood.z,
+        ]
     const tracks: TrackPiece[] =
       Math.abs(centre - acrossAt) < halfAcross + half
         ? [
@@ -290,20 +306,23 @@ export function layTracks(world: World): World {
           ]
         : []
     return {
-      ...n,
+      ...neighbourhood,
       layout: {
-        ...n.layout,
+        ...neighbourhood.layout,
         tiles: tiles.map((t) =>
-          !painted.has(cellKey(n.x + t.x, n.z + t.z)) && under(t)
+          !painted.has(cellKey(neighbourhood.x + t.x, neighbourhood.z + t.z)) &&
+          under(t)
             ? { ...t, kind: 'grass', top: GRASS_TOP }
             : t,
         ),
         tracks,
-        trees: n.layout.trees.filter((p) => !gone(p)),
-        flowers: n.layout.flowers.filter((p) => !gone(p)),
-        reeds: n.layout.reeds.filter((p) => !gone(p)),
-        rocks: n.layout.rocks.filter((p) => !gone(p)),
-        umbrellas: n.layout.umbrellas.filter((p) => !gone(p)),
+        trees: neighbourhood.layout.trees.filter((tree) => !gone(tree)),
+        flowers: neighbourhood.layout.flowers.filter((flower) => !gone(flower)),
+        reeds: neighbourhood.layout.reeds.filter((point) => !gone(point)),
+        rocks: neighbourhood.layout.rocks.filter((point) => !gone(point)),
+        umbrellas: neighbourhood.layout.umbrellas.filter(
+          (umbrella) => !gone(umbrella),
+        ),
         structures,
       },
     }

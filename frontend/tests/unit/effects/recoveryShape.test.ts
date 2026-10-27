@@ -12,7 +12,7 @@ import type { BuildingState, Status } from '../../../src/domain/status'
 const state = (floors: Status[], collapsed = false): BuildingState => ({
   collapsed,
   floors,
-  burning: floors.map((s, i) => !collapsed && i > 0 && s === 'down'),
+  burning: floors.map((status, i) => !collapsed && i > 0 && status === 'down'),
 })
 
 describe('recoveredFloors', () => {

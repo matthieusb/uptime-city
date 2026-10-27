@@ -2,7 +2,7 @@ import asyncio
 from datetime import timedelta
 from pathlib import Path
 
-from tests.helpers import NOW, result
+from tests.storage.helpers import NOW, result
 from uptime_city.config.models import StorageConfig
 from uptime_city.probes.base import ProbeResult
 from uptime_city.storage.database import Database
@@ -16,8 +16,13 @@ async def test_results_come_back_oldest_first_per_endpoint_limited() -> None:
     await database.results.add("b", result(2))
 
     kept = await database.results.recent("a", 2)
-    assert [r.ts for r in kept] == [NOW - timedelta(minutes=3), NOW - timedelta(minutes=1)]
-    assert [r.ts for r in await database.results.recent("b", 50)] == [NOW - timedelta(minutes=2)]
+    assert [result.ts for result in kept] == [
+        NOW - timedelta(minutes=3),
+        NOW - timedelta(minutes=1),
+    ]
+    assert [result.ts for result in await database.results.recent("b", 50)] == [
+        NOW - timedelta(minutes=2)
+    ]
     assert await database.results.recent("none", 50) == []
     await database.close()
 
@@ -62,10 +67,12 @@ async def test_fifty_concurrent_adds_lose_nothing(tmp_path: Path) -> None:
     database = Database(StorageConfig(type="sqlite", path=str(tmp_path / "uptime.db")))
     await database.init()
 
-    await asyncio.gather(*(database.results.add("a", result(n)) for n in range(1, 51)))
+    await asyncio.gather(*(database.results.add("a", result(number)) for number in range(1, 51)))
 
     stored = await database.results.recent("a", 100)
-    assert sorted(r.ts for r in stored) == sorted(result(n).ts for n in range(1, 51))
+    assert sorted(result.ts for result in stored) == sorted(
+        result(number).ts for number in range(1, 51)
+    )
     await database.close()
 
 
@@ -79,7 +86,10 @@ async def test_a_result_exactly_at_the_pruning_limit_is_kept() -> None:
 
     assert deleted == 1
     kept = await database.results.recent("a", 50)
-    assert [r.ts for r in kept] == [NOW - timedelta(minutes=60), NOW - timedelta(minutes=59)]
+    assert [result.ts for result in kept] == [
+        NOW - timedelta(minutes=60),
+        NOW - timedelta(minutes=59),
+    ]
     await database.close()
 
 
@@ -105,7 +115,7 @@ async def test_a_limit_above_the_number_of_results_gives_them_all() -> None:
 async def test_results_with_the_same_time_come_back_in_insertion_order() -> None:
     database = Database(StorageConfig(type="memory"))
     await database.init()
-    same_time = [ProbeResult(ts=NOW, success=False, error=f"error {n}") for n in range(5)]
+    same_time = [ProbeResult(ts=NOW, success=False, error=f"error {number}") for number in range(5)]
     for stored in same_time:
         await database.results.add("a", stored)
 

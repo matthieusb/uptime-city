@@ -19,18 +19,27 @@ vi.mock('../../../src/city/CityView', () => ({
     refreshMenu,
     seed,
     onRegenerate,
+    planet,
+    planetSeed,
+    onTogglePlanet,
   }: {
     endpoints: EndpointInfo[]
     refreshMenu: ReactNode
     seed: string
     onRegenerate: () => void
+    planet: boolean
+    planetSeed: string
+    onTogglePlanet: () => void
   }) {
     useQueries({ queries: endpoints.map(historyQuery) })
     return (
       <div data-testid="city-view">
         {refreshMenu}
         <span data-testid="city-seed">{seed}</span>
+        <span data-testid="planet-on">{String(planet)}</span>
+        <span data-testid="planet-seed">{planetSeed}</span>
         <button onClick={onRegenerate}>regenerate</button>
+        <button onClick={onTogglePlanet}>toggle planet</button>
         {endpoints.map((e) => (
           <span key={e.id} data-testid="city-building" />
         ))}
@@ -89,6 +98,9 @@ async function renderApp(
       if (url.endsWith('/city')) return Response.json({ seed })
       if (url.endsWith('/city/regenerate'))
         return Response.json({ seed: 'fresh' })
+      if (url.endsWith('/planet')) return Response.json({ seed: 'kept-planet' })
+      if (url.endsWith('/planet/regenerate'))
+        return Response.json({ seed: 'fresh-planet' })
       return Response.json(
         url.endsWith('/endpoints') ? endpoints : historyOf(url),
       )
@@ -310,4 +322,83 @@ it('posts to regenerate the city, showing the splash screen until the new one is
     },
     { timeout: 3000 },
   )
+})
+
+it('shows the flat plan at first, with no planet seed asked for', async () => {
+  await renderApp()
+  expect((await screen.findByTestId('planet-on')).textContent).toBe('false')
+  expect(
+    vi
+      .mocked(fetch)
+      .mock.calls.some(([url]) => String(url).endsWith('/planet')),
+  ).toBe(false)
+})
+
+it('switches to the planet behind the splash screen, with the seed kept by the backend', async () => {
+  await renderApp()
+  await screen.findByTestId('city-view')
+
+  await userEvent.click(screen.getByRole('button', { name: 'toggle planet' }))
+
+  expect(await screen.findByText('Building the planet…')).toBeTruthy()
+  expect(screen.queryByTestId('city-view')).toBeNull()
+  await waitFor(
+    () => {
+      expect(screen.queryByText('Building the planet…')).toBeNull()
+      expect(screen.getByTestId('planet-on').textContent).toBe('true')
+      expect(screen.getByTestId('planet-seed').textContent).toBe('kept-planet')
+    },
+    { timeout: 3000 },
+  )
+})
+
+it('goes back to the flat plan behind the splash screen of the city', async () => {
+  localStorage.setItem('uptime-city:planet', 'true')
+  await renderApp()
+  await screen.findByTestId('city-view')
+
+  await userEvent.click(screen.getByRole('button', { name: 'toggle planet' }))
+
+  expect(await screen.findByText('Building the city…')).toBeTruthy()
+  await waitFor(
+    () => expect(screen.getByTestId('planet-on').textContent).toBe('false'),
+    { timeout: 3000 },
+  )
+})
+
+it('keeps the chosen view for the next visit', async () => {
+  localStorage.setItem('uptime-city:planet', 'true')
+  await renderApp()
+
+  expect((await screen.findByTestId('planet-on')).textContent).toBe('true')
+  expect(screen.getByTestId('planet-seed').textContent).toBe('kept-planet')
+})
+
+it('ignores a stored view that is not valid', async () => {
+  localStorage.setItem('uptime-city:planet', '"moon"')
+  await renderApp()
+
+  expect((await screen.findByTestId('planet-on')).textContent).toBe('false')
+})
+
+it('regenerates the planet, not the city, while on the planet', async () => {
+  localStorage.setItem('uptime-city:planet', 'true')
+  await renderApp()
+  await screen.findByTestId('city-view')
+
+  await userEvent.click(screen.getByRole('button', { name: 'regenerate' }))
+
+  expect(await screen.findByText('Building the planet…')).toBeTruthy()
+  await waitFor(
+    () =>
+      expect(screen.getByTestId('planet-seed').textContent).toBe(
+        'fresh-planet',
+      ),
+    { timeout: 3000 },
+  )
+  const posts = vi
+    .mocked(fetch)
+    .mock.calls.filter(([, init]) => init?.method === 'POST')
+    .map(([url]) => String(url))
+  expect(posts).toEqual(['/api/v1/planet/regenerate'])
 })

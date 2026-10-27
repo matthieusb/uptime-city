@@ -305,13 +305,15 @@ describe('trains on the map', () => {
     buildings: [{ id: `host-${i}`, services: 2 }],
   }))
   const world = worldLayout(specs)
-  const plots = [...world.neighbourhoods, ...world.wilds].map((n) => ({
-    id: n.id,
-    x: n.x,
-    z: n.z,
-    halfWidth: n.layout.halfWidth,
-    halfDepth: n.layout.halfDepth,
-  }))
+  const plots = [...world.neighbourhoods, ...world.wilds].map(
+    (neighbourhood) => ({
+      id: neighbourhood.id,
+      x: neighbourhood.x,
+      z: neighbourhood.z,
+      halfWidth: neighbourhood.layout.halfWidth,
+      halfDepth: neighbourhood.layout.halfDepth,
+    }),
+  )
 
   it('spans several plates and is on a plate all along the railway', () => {
     const real = world.track!

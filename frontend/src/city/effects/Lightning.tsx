@@ -27,7 +27,7 @@ export default function Lightning({
   visible: boolean
 }) {
   const storms = useMemo(
-    () => clouds.filter((c) => c.kind === 'storm'),
+    () => clouds.filter((cloud) => cloud.kind === 'storm'),
     [clouds],
   )
   const total = storms.length * BOLT_SEGMENTS

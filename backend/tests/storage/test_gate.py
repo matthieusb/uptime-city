@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.helpers import result
+from tests.storage.helpers import result
 from uptime_city.config.models import StorageConfig
 from uptime_city.storage.database import Database
 from uptime_city.storage.gate import Gate
@@ -60,7 +60,7 @@ async def test_the_gate_never_runs_two_queries_at_once() -> None:
     most = 0
     finished: list[int] = []
 
-    def query(n: int):
+    def query(number: int):
         async def run() -> int:
             nonlocal running, most
             running += 1
@@ -68,12 +68,12 @@ async def test_the_gate_never_runs_two_queries_at_once() -> None:
             for _ in range(3):
                 await asyncio.sleep(0)
             running -= 1
-            finished.append(n)
-            return n * 10
+            finished.append(number)
+            return number * 10
 
         return run
 
-    answers = await asyncio.gather(*(gate.run(query(n)) for n in range(5)))
+    answers = await asyncio.gather(*(gate.run(query(number)) for number in range(5)))
 
     assert most == 1
     assert answers == [0, 10, 20, 30, 40]

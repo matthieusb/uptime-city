@@ -7,7 +7,7 @@ import { cameraMoved, shadowDue, type SeenView } from './shadowPace'
 // late is not visible. The map is large: this saves a big share of the work of each frame, and
 // spares a zoom the frames that alternate between heavy and light.
 export default function ShadowPacer() {
-  const shadowMap = useThree((s) => s.gl.shadowMap)
+  const shadowMap = useThree((rootState) => rootState.gl.shadowMap)
   const frame = useRef(0)
   const seen = useRef<SeenView>({ zoom: NaN, x: NaN, y: NaN, z: NaN })
   useEffect(() => {

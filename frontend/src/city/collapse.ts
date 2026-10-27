@@ -49,6 +49,26 @@ export function trackCollapse(
   return { status, start: previous?.status === 'up' ? now : -Infinity }
 }
 
+// Whether a host seen back up rebuilds its building before our eyes: not while the tile is being
+// restored (the wave stands the building up again, and a rebuild started under it would go on
+// after the wave is gone) nor while it lies in ruins at once.
+export const rebuildWanted = (
+  demolished: boolean,
+  restoring: boolean,
+  ruined: boolean,
+): boolean => demolished && !restoring && !ruined
+
+// The collapse of a building seen up in a restored tile once the wave has reached it, `since`
+// seconds ago: it stays in ruins until then, and is rebuilt from the moment the wave passed.
+export function rebuiltAfterWave(
+  collapse: Collapse,
+  now: number,
+  since: number,
+): Collapse {
+  if (collapse.rebuildStart !== undefined) return collapse
+  return { status: 'up', start: null, rebuildStart: now - Math.max(0, since) }
+}
+
 // Seconds since the rebuild began, or null when the building was not rebuilt
 // before our eyes.
 export function rebuildElapsed(collapse: Collapse, now: number): number | null {

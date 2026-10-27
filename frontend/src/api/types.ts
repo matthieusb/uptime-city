@@ -58,6 +58,43 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/planet': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Planet */
+    get: operations['planet_api_v1_planet_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/planet/regenerate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Regenerate Planet
+     * @description Draws a new seed for the planet and keeps it.
+     */
+    post: operations['regenerate_planet_api_v1_planet_regenerate_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/simulation/refresh': {
     parameters: {
       query?: never
@@ -237,6 +274,11 @@ export interface components {
       /** Next Refresh In S */
       next_refresh_in_s: number | null
     }
+    /** PlanetSettings */
+    PlanetSettings: {
+      /** Seed */
+      seed: string
+    }
     /** ProbeResult */
     ProbeResult: {
       /**
@@ -334,6 +376,46 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['CitySettings']
+        }
+      }
+    }
+  }
+  planet_api_v1_planet_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlanetSettings']
+        }
+      }
+    }
+  }
+  regenerate_planet_api_v1_planet_regenerate_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlanetSettings']
         }
       }
     }

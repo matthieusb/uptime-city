@@ -9,6 +9,8 @@ import {
   floorPose,
   RUBBLE_HEIGHT,
   rebuildProgress,
+  rebuildWanted,
+  rebuiltAfterWave,
   trackCollapse,
   type Collapse,
 } from '../../../src/city/collapse'
@@ -38,6 +40,60 @@ describe('rebuild', () => {
     expect(
       trackCollapse(null, 'up', 1, false, true).rebuildStart,
     ).toBeUndefined()
+  })
+})
+
+describe('a tile restored after a nuke', () => {
+  it('does not rebuild its buildings: the wave stands them up', () => {
+    expect(rebuildWanted(true, false, false)).toBe(true)
+    expect(rebuildWanted(true, true, false)).toBe(false)
+    expect(rebuildWanted(true, false, true)).toBe(false)
+    expect(rebuildWanted(false, false, false)).toBe(false)
+  })
+
+  it('has no rebuild left running once the wave is gone', () => {
+    // Nuked and down, then up again while the wave sweeps, then after it.
+    let state = trackCollapse(null, 'up', 1)
+    state = trackCollapse(state, 'down', 5)
+    state = trackCollapse(
+      state,
+      'up',
+      20,
+      false,
+      rebuildWanted(true, true, false),
+    )
+    state = trackCollapse(
+      state,
+      'up',
+      25,
+      false,
+      rebuildWanted(true, false, false),
+    )
+    expect(state.rebuildStart).toBeUndefined()
+    expect(rebuildProgress(state, 25)).toBeNull()
+  })
+})
+
+describe('a building the wave of a restoration reaches', () => {
+  const standing = trackCollapse(trackCollapse(null, 'up', 1), 'down', 5)
+
+  it('is rebuilt from the moment the wave passed it', () => {
+    const state = rebuiltAfterWave(standing, 30, 1.5)
+    expect(state.status).toBe('up')
+    expect(state.start).toBeNull()
+    expect(rebuildProgress(state, 30)).toBeCloseTo(1.5 / REBUILD_S)
+    expect(rebuildProgress(state, 30 + REBUILD_S)).toBeNull()
+  })
+
+  it('keeps its first start, whatever happens next', () => {
+    const first = rebuiltAfterWave(standing, 30, 0)
+    expect(rebuiltAfterWave(first, 31, 0)).toBe(first)
+    // And the tracker keeps it while the building is up.
+    expect(trackCollapse(first, 'up', 32).rebuildStart).toBe(30)
+  })
+
+  it('never starts before the wave: a negative delay counts as none', () => {
+    expect(rebuildProgress(rebuiltAfterWave(standing, 30, -4), 30)).toBe(0)
   })
 })
 
@@ -149,9 +205,9 @@ describe('floorPose', () => {
       expect(pose.sy).toBeLessThan(1)
     }
     // Tumbled, not neatly stacked.
-    expect(poses(1).some((p) => Math.abs(p.rx) + Math.abs(p.rz) > 0.1)).toBe(
-      true,
-    )
+    expect(
+      poses(1).some((pose) => Math.abs(pose.rx) + Math.abs(pose.rz) > 0.1),
+    ).toBe(true)
   })
 
   it('keeps the pile low however many floors fell', () => {

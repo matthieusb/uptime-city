@@ -1,6 +1,6 @@
 import pytest
 
-from tests.helpers import make_client
+from tests.api.helpers import make_client
 
 # The implemented routes of the contract in the root CLAUDE.md (no /status or /events yet).
 ROUTES = {
@@ -8,6 +8,8 @@ ROUTES = {
     ("get", "/api/v1/info"),
     ("get", "/api/v1/city"),
     ("post", "/api/v1/city/regenerate"),
+    ("get", "/api/v1/planet"),
+    ("post", "/api/v1/planet/regenerate"),
     ("get", "/api/v1/endpoints"),
     ("get", "/api/v1/endpoints/{endpoint_id}/history"),
     ("post", "/api/v1/simulation/refresh"),
@@ -29,5 +31,5 @@ def test_the_openapi_spec_lists_the_simulation_actions(action: str) -> None:
     with make_client() as client:
         spec = client.get("/openapi.json").json()
     parameters = spec["paths"]["/api/v1/simulation/actions/{action}"]["post"]["parameters"]
-    (path_parameter,) = (p for p in parameters if p["name"] == "action")
+    (path_parameter,) = (parameter for parameter in parameters if parameter["name"] == "action")
     assert action in path_parameter["schema"]["enum"]

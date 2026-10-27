@@ -4,9 +4,9 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import FastAPI
 
-from uptime_city import main
+from uptime_city import cli
+from uptime_city.cli import parse_args
 from uptime_city.config.models import Config, PhysicalHost, StorageConfig
-from uptime_city.main import parse_args
 
 
 def test_server_listens_on_localhost_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -64,22 +64,22 @@ def test_run_serves_the_app_on_the_given_host_and_port(
     )
     load = MagicMock(return_value=config)
     serve = MagicMock()
-    monkeypatch.setattr(main, "load_config", load)
-    monkeypatch.setattr(main.uvicorn, "run", serve)
+    monkeypatch.setattr(cli, "load_config", load)
+    monkeypatch.setattr(cli.uvicorn, "run", serve)
     monkeypatch.delenv("SIMULATION_MODE", raising=False)
     path = tmp_path / "config.yaml"
     monkeypatch.setattr(
         "sys.argv", ["uptime-city", "--config", str(path), "--host", "0.0.0.0", "--port", "9100"]
     )
 
-    main.run()
+    cli.run()
 
     load.assert_called_once_with(path)
     serve.assert_called_once()
     (app,) = serve.call_args.args
     assert isinstance(app, FastAPI)
     assert serve.call_args.kwargs == {"host": "0.0.0.0", "port": 9100}
-    assert app.state.monitor.simulation is None
+    assert app.state.monitor.simulation_control is None
 
 
 def test_run_simulates_with_the_simulate_flag(
@@ -89,14 +89,14 @@ def test_run_simulates_with_the_simulate_flag(
         storage=StorageConfig(type="memory"), hosts=[PhysicalHost(name="srv", url="icmp://srv")]
     )
     serve = MagicMock()
-    monkeypatch.setattr(main, "load_config", MagicMock(return_value=config))
-    monkeypatch.setattr(main.uvicorn, "run", serve)
+    monkeypatch.setattr(cli, "load_config", MagicMock(return_value=config))
+    monkeypatch.setattr(cli.uvicorn, "run", serve)
     monkeypatch.setattr("sys.argv", ["uptime-city", "--config", str(tmp_path / "c.yaml"), "-s"])
 
-    main.run()
+    cli.run()
 
     (app,) = serve.call_args.args
-    assert app.state.monitor.simulation is not None
+    assert app.state.monitor.simulation_control is not None
 
 
 @pytest.mark.xfail(

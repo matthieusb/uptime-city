@@ -45,7 +45,7 @@ export interface Focus {
 
 // The depth of a corner of a neighbourhood once it is scaled around `center`.
 function corners(
-  n: Neighbourhood,
+  neighbourhood: Neighbourhood,
   top: number,
   center: [number, number, number],
   scale: number,
@@ -58,9 +58,9 @@ function corners(
           middle +
           scale *
             (depth(
-              n.x + dx * n.layout.halfWidth,
+              neighbourhood.x + dx * neighbourhood.layout.halfWidth,
               y,
-              n.z + dz * n.layout.halfDepth,
+              neighbourhood.z + dz * neighbourhood.layout.halfDepth,
             ) -
               middle),
       ),
@@ -77,11 +77,13 @@ export function focusFor(
   top: number,
   center: [number, number, number],
 ): Focus | null {
-  const focused = world.neighbourhoods.find((n) => n.id === id)
+  const focused = world.neighbourhoods.find(
+    (neighbourhood) => neighbourhood.id === id,
+  )
   if (!focused) return null
   const others = [...world.neighbourhoods, ...world.wilds]
-    .filter((n) => n !== focused)
-    .flatMap((n) => corners(n, top, center, FAR))
+    .filter((neighbourhood) => neighbourhood !== focused)
+    .flatMap((neighbourhood) => corners(neighbourhood, top, center, FAR))
   const behind = Math.max(-Infinity, ...others)
   const front = Math.min(...corners(focused, 0, center, NEAR))
   const distance = Math.max(0, behind - front) + MARGIN
@@ -93,13 +95,13 @@ export function focusFor(
 
 // What the camera frames to show one neighbourhood, up to its tallest
 // building, as big as it gets in focus view.
-export function plateFrame(n: Neighbourhood, top: number): Frame {
+export function plateFrame(neighbourhood: Neighbourhood, top: number): Frame {
   const frame = worldFrame(
     {
-      neighbourhoods: [n],
+      neighbourhoods: [neighbourhood],
       wilds: [],
-      halfWidth: Math.abs(n.x) + n.layout.halfWidth,
-      halfDepth: Math.abs(n.z) + n.layout.halfDepth,
+      halfWidth: Math.abs(neighbourhood.x) + neighbourhood.layout.halfWidth,
+      halfDepth: Math.abs(neighbourhood.z) + neighbourhood.layout.halfDepth,
     },
     top,
   )

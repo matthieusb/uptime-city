@@ -3,7 +3,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from tests.helpers import make_client
+from tests.api.helpers import make_client
 from uptime_city.config.models import StorageConfig
 from uptime_city.storage.database import Database
 

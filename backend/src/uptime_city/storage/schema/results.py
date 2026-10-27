@@ -1,24 +1,6 @@
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    Float,
-    Index,
-    Integer,
-    MetaData,
-    String,
-    Table,
-    Text,
-)
+from sqlalchemy import Boolean, Column, DateTime, Float, Index, Integer, String, Table, Text
 
-metadata = MetaData()
-
-settings = Table(
-    "settings",
-    metadata,
-    Column("key", String(64), primary_key=True),
-    Column("value", Text, nullable=False),
-)
+from uptime_city.storage.schema.metadata import metadata
 
 results = Table(
     "results",

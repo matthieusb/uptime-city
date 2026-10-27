@@ -183,9 +183,9 @@ function profileOf(id: number): Profile {
   const coupling = tgv ? TGV_COUPLING : COUPLING
   const behind: number[] = []
   let front = 0
-  for (const c of carriages) {
-    behind.push(front + c.length / 2)
-    front += c.length + coupling
+  for (const carriage of carriages) {
+    behind.push(front + carriage.length / 2)
+    front += carriage.length + coupling
   }
   const h = hash(`train:${id}:speed`)
   const [slow, fast] = tgv ? TGV_SPEED : SPEED

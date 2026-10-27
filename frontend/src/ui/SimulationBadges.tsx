@@ -167,7 +167,7 @@ function SimulationControls({ open }: { open: boolean }) {
               min={1}
               value={services}
               aria-label="Number of services"
-              onChange={(e) => setServices(e.target.value)}
+              onChange={(event) => setServices(event.target.value)}
             />
           </label>
           {EVENTS.map((group, n) => (

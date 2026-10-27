@@ -99,8 +99,8 @@ export function graphModel(
   return {
     empty: results.length === 0,
     points,
-    line: points.filter((p) => p.y !== null),
-    outages: points.filter((p) => !p.ok),
+    line: points.filter((graphPoint) => graphPoint.y !== null),
+    outages: points.filter((graphPoint) => !graphPoint.ok),
     yTicks: [0, top / 2, top].map((value) => ({
       y: y(value),
       label: `${value} ms`,
