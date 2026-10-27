@@ -123,18 +123,22 @@ const PARTS: Record<PlaneKind, Part[]> = {
 
 type Materials = Record<Tone, MeshLambertMaterial>
 
-function useMaterials(count: number): Materials[] {
-  const all = useMemo(
-    () =>
-      Array.from({ length: count }, (): Materials => ({
-        body: new MeshLambertMaterial({ color: TOURISM[0][0] }),
-        accent: new MeshLambertMaterial({ color: TOURISM[0][1] }),
-        wing: new MeshLambertMaterial({ color: '#c9ced6' }),
-        glass: new MeshLambertMaterial({ color: '#9fd3ff' }),
-        dark: new MeshLambertMaterial({ color: '#2b2d33' }),
-      })),
-    [count],
-  )
+function useMaterials(count: number, free: boolean): Materials[] {
+  const all = useMemo(() => {
+    // On the planet, the planes of the sky are placed on the planet itself: no bending.
+    const make = (color: string) => {
+      const material = new MeshLambertMaterial({ color })
+      if (free) material.defines = { PLANET_FREE: '' }
+      return material
+    }
+    return Array.from({ length: count }, (): Materials => ({
+      body: make(TOURISM[0][0]),
+      accent: make(TOURISM[0][1]),
+      wing: make('#c9ced6'),
+      glass: make('#9fd3ff'),
+      dark: make('#2b2d33'),
+    }))
+  }, [count, free])
   useEffect(
     () => () => {
       for (const materials of all)
@@ -147,7 +151,11 @@ function useMaterials(count: number): Materials[] {
 
 // A pool of `count` planes, each in a group of its own that is placed, turned and dressed in the
 // livery and the model of its kind: shared by the planes of the airport and those of the sky.
-export function usePlanePool(count = MAX_PLANES): {
+export function usePlanePool(
+  count = MAX_PLANES,
+  // Whether they fly in the frame of the planet, out of the atlas that is bent onto it.
+  free = false,
+): {
   // Puts plane `i` at (x, y, z), scaled by `k`, as `state` says; or hides it, with no state.
   place: (
     i: number,
@@ -159,7 +167,7 @@ export function usePlanePool(count = MAX_PLANES): {
   ) => void
   bodies: ReactNode
 } {
-  const materials = useMaterials(count)
+  const materials = useMaterials(count, free)
   const nodes = useRef<(Group | null)[]>([])
   // The model of each kind inside each plane's group, and the look it has now.
   const models = useRef<Partial<Record<PlaneKind, Group | null>>[]>([])
@@ -216,7 +224,7 @@ export function usePlanePool(count = MAX_PLANES): {
             <mesh
               key={n}
               position={part.at}
-              castShadow
+              castShadow={!free}
               material={materials[part.tone]}
             >
               <boxGeometry args={part.size} />

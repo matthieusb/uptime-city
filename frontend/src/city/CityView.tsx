@@ -101,10 +101,10 @@ import {
 import Plate from './Plate'
 import Scenery from './Scenery'
 import { findAirport } from './airport'
-import Bridges from './planet/Bridges'
+import { disablePlanetBend, enablePlanetBend } from './planet/bendPatch'
 import PlanetFlights from './planet/PlanetFlights'
 import PlanetSea from './planet/PlanetSea'
-import { planetLayout } from './planet/planet'
+import { planetLayout, type Planet } from './planet/planet'
 import { planetWorld } from './planet/planetWorld'
 import { nukedLayout, worldFrame, worldLayout, type Frame } from './world'
 
@@ -206,15 +206,10 @@ export default function CityView({
       })),
     [groups],
   )
-  // On the planet, the islands stand flat on a sphere, with bridges between them.
+  // On the planet, the islands are wrapped round a sphere of sea.
   const planetData = useMemo(
     () => (planet ? planetLayout(specs, planetSeed) : null),
     [planet, specs, planetSeed],
-  )
-  const islandOf = useMemo(
-    () =>
-      new Map(planetData?.islands.map((island) => [island.id, island]) ?? []),
-    [planetData],
   )
   const world = useMemo(() => {
     if (planetData) return planetWorld(planetData)
@@ -376,6 +371,11 @@ export default function CityView({
   const [focusedId, setFocusedId] = useState<string | null>(null)
   // The exploded view: the tiles are set a little apart.
   const [exploded, setExploded] = useState(false)
+  // The focus view belongs to the flat map: it ends when the planet comes, and when it goes.
+  useEffect(() => {
+    setFocusedId(null)
+    setBuilding(null)
+  }, [planet])
   // The legend only applies to the whole map: in focus, every label shows.
   const labels = focusedId ? ALL_LABELS : chosen
   // The building in focus within it, if any.
@@ -522,311 +522,322 @@ export default function CityView({
     : Math.hypot(world.halfWidth, world.halfDepth) + 4 + lift
   const lightDistance = shadowBox * 1.5 + 50
 
+  // The canvas is only made once the shaders are bent for what it shows (or are flat again), as
+  // they are read when a program is compiled.
+  const [bentFor, setBentFor] = useState<Planet | null | undefined>(undefined)
+  useLayoutEffect(() => {
+    if (planetData) enablePlanetBend(planetData)
+    else disablePlanetBend()
+    setBentFor(planetData)
+    return disablePlanetBend
+  }, [planetData])
+  const canvasReady = bentFor === planetData
+
   return (
     <div ref={view} className="city" data-testid="city-view">
-      <Canvas
-        key={planetData ? 'planet' : 'flat'}
-        orthographic={!planetData}
-        dpr={PIXEL_RATIO}
-        gl={{ antialias: false }}
-        shadows="basic"
-        onCreated={({ gl }) => {
-          // The wave of a restoration clips the tile on one side of it.
-          gl.localClippingEnabled = true
-        }}
-        onPointerMissed={back}
-        camera={
-          planetData
-            ? {
-                position: [0, 0, 3 * planetData.radius],
-                near: 1,
-                far: 12 * planetData.radius,
-                fov: 40,
-              }
-            : {
-                position: cameraPosition(frame),
-                near: 0.1,
-                far: 4 * frame.distance,
-              }
-        }
-      >
-        <ShadowPacer />
-        {planetData ? (
-          // The globe turns under the pointer; there is no focus view on it.
-          <OrbitControls
-            makeDefault
-            enablePan={false}
-            minDistance={1.3 * planetData.radius}
-            maxDistance={6 * planetData.radius}
-          />
-        ) : (
-          <>
-            <FitCamera frame={frame} />
-            <CameraRig
-              offset={offset(frame)}
-              focusFrame={buildingFocus ?? focusFrame}
-            />
-            <Backdrop focus={focus} frame={frame} onClose={back} />
-            <MapControls
+      {canvasReady && (
+        <Canvas
+          key={planetData ? 'planet' : 'flat'}
+          orthographic={!planetData}
+          dpr={PIXEL_RATIO}
+          gl={{ antialias: false }}
+          shadows="basic"
+          onCreated={({ gl }) => {
+            // The wave of a restoration clips the tile on one side of it.
+            gl.localClippingEnabled = true
+          }}
+          onPointerMissed={back}
+          camera={
+            planetData
+              ? {
+                  position: [0, 0, 3 * planetData.radius],
+                  near: 1,
+                  far: 12 * planetData.radius,
+                  fov: 40,
+                }
+              : {
+                  position: cameraPosition(frame),
+                  near: 0.1,
+                  far: 4 * frame.distance,
+                }
+          }
+        >
+          <ShadowPacer />
+          {planetData ? (
+            // The globe turns under the pointer; there is no focus view on it.
+            <OrbitControls
               makeDefault
-              enableRotate={false}
-              screenSpacePanning
-              minZoom={MIN_ZOOM}
-              maxZoom={MAX_ZOOM}
-              target={frame.target}
+              enablePan={false}
+              minDistance={1.3 * planetData.radius}
+              maxDistance={6 * planetData.radius}
             />
-          </>
-        )}
-        {planetData && (
-          <>
-            <PlanetSea radius={planetData.radius} />
-            <Bridges bridges={planetData.bridges} />
-          </>
-        )}
-        <hemisphereLight args={['#dff3ff', '#5a4a3a', 1.2]} />
-        <directionalLight
-          position={[
-            0.46 * lightDistance,
-            0.78 * lightDistance,
-            0.21 * lightDistance,
-          ]}
-          intensity={2}
-          castShadow
-          shadow-mapSize={[4096, 4096]}
-          shadow-bias={-0.002}
-          shadow-camera-left={-shadowBox}
-          shadow-camera-right={shadowBox}
-          shadow-camera-top={shadowBox}
-          shadow-camera-bottom={-shadowBox}
-          shadow-camera-far={4 * lightDistance}
-        />
-        {/* In focus, they would drift in front of what is shown. */}
-        {!planetData && (
-          <Clouds
-            halfWidth={world.halfWidth}
-            halfDepth={world.halfDepth}
-            height={top + 2}
-            visible={!focusedId && effects.has('clouds')}
-            density={densities.clouds}
+          ) : (
+            <>
+              <FitCamera frame={frame} />
+              <CameraRig
+                offset={offset(frame)}
+                focusFrame={buildingFocus ?? focusFrame}
+              />
+              <Backdrop focus={focus} frame={frame} onClose={back} />
+              <MapControls
+                makeDefault
+                enableRotate={false}
+                screenSpacePanning
+                minZoom={MIN_ZOOM}
+                maxZoom={MAX_ZOOM}
+                target={frame.target}
+              />
+            </>
+          )}
+          {planetData && (
+            <>
+              <PlanetSea radius={planetData.radius} />
+            </>
+          )}
+          <hemisphereLight args={['#dff3ff', '#5a4a3a', 1.2]} />
+          <directionalLight
+            position={[
+              0.46 * lightDistance,
+              0.78 * lightDistance,
+              0.21 * lightDistance,
+            ]}
+            intensity={2}
+            castShadow
+            shadow-mapSize={[4096, 4096]}
+            shadow-bias={-0.002}
+            shadow-camera-left={-shadowBox}
+            shadow-camera-right={shadowBox}
+            shadow-camera-top={shadowBox}
+            shadow-camera-bottom={-shadowBox}
+            shadow-camera-far={4 * lightDistance}
           />
-        )}
-        {world.wilds.map((neighbourhood) => (
-          <Plate
-            key={neighbourhood.id}
-            plate={neighbourhood}
-            focus={null}
-            inert
-            exploded={exploded}
-            register={register}
-            popDelay={pops.get(neighbourhood.id)}
-            pose={
-              focusFrame && focusedId
-                ? { center: focusFrame.target, scale: FAR }
-                : null
-            }
-            pickable={false}
-            onSelect={back}
-          >
-            <Scenery layout={neighbourhood.layout} />
-          </Plate>
-        ))}
-        {world.neighbourhoods.map((n) => {
-          const layout = layouts.get(n.id) ?? n.layout
-          const isNuked = nuked.has(n.id)
-          const phase = strikes.phases.get(n.id)
-          const startedAt = strikes.startedAt.get(n.id) ?? null
-          const restoredAt = strikes.restoredAt.get(n.id) ?? null
-          const range = sweepRange(layout.halfWidth, layout.halfDepth)
-          const restoring = phase === 'restoring' && restoredAt !== null
-          const sides = serviceLabelSides(layout.lots)
-          // The labels of the others are hidden then: keeping them as on the whole map spares
-          // drawing a new texture for each of them when a neighbourhood is put in focus.
-          const inFocus = focusedId === n.id
-          const buildings: BuildingProps[] = layout.lots
-            .filter((lot) => !lot.decor)
-            .map((lot) => {
-              const group = hosts.get(lot.id)!
-              // The floors are stacked from the ground up, so the first
-              // service in alphabetical order goes on the top floor.
-              const floors = [...group.services].reverse()
-              return {
-                lot,
-                // On the whole map, a badge alone: there is little room.
-                name:
-                  group.host.kind === 'vm' && inFocus ? group.host.name : '',
-                services: floors.map((s) => s.name),
-                labelSide: sides.get(lot.id),
-                // In focus, the services of the building up and down.
-                badge: inFocus
-                  ? buildingBadges(
-                      group.host.kind === 'vm' ? VM_BADGE : SERVICES_BADGE,
-                      buildingCounts(group, history),
-                    )
-                  : group.host.kind === 'vm'
-                    ? SHORT_VM_BADGE
-                    : SHORT_SERVICES_BADGE,
-                // Only the building in focus keeps its labels.
-                muted: buildingId !== null && lot.id !== buildingId,
-                showLabel: labels.has(
-                  group.host.kind === 'vm' ? 'vm' : 'services',
-                ),
-                // In ruins at once, unless it falls before our eyes.
-                ruined: phase === 'ruins',
-                demolished: effects.has('animations') && !isNuked,
-                holdUntil: isNuked ? 0 : holdTime,
-                firefighters: effects.has('animations') && !isNuked,
-                recovering: effects.has('animations') && !isNuked,
-                exploding: effects.has('animations') && !isNuked,
-                roads: {
-                  x: n.x + lot.x,
-                  z: n.z + lot.z,
-                  ways: world.ways,
-                  roundabouts: world.roundabouts,
-                },
-                restore: restoring
-                  ? { startedAt: restoredAt, range }
-                  : undefined,
-                state: isNuked
-                  ? nukedState(1 + group.services.length)
-                  : phase === 'incoming'
-                    ? standingState(1 + group.services.length)
-                    : buildingState(
-                        history.get(group.host.id),
-                        floors.map((s) => history.get(s.id)),
-                      ),
-              }
-            })
-          return (
+          {/* In focus, they would drift in front of what is shown. */}
+          {!planetData && (
+            <Clouds
+              halfWidth={world.halfWidth}
+              halfDepth={world.halfDepth}
+              height={top + 2}
+              visible={!focusedId && effects.has('clouds')}
+              density={densities.clouds}
+            />
+          )}
+          {world.wilds.map((neighbourhood) => (
             <Plate
-              key={n.id}
-              plate={n}
-              focus={focusedId === n.id ? focus : null}
+              key={neighbourhood.id}
+              plate={neighbourhood}
+              focus={null}
+              inert
               exploded={exploded}
               register={register}
-              popDelay={pops.get(n.id)}
+              popDelay={pops.get(neighbourhood.id)}
               pose={
                 focusFrame && focusedId
-                  ? {
-                      center: focusFrame.target,
-                      scale: focusedId === n.id ? NEAR : FAR,
-                    }
+                  ? { center: focusFrame.target, scale: FAR }
                   : null
               }
-              placement={islandOf.get(n.id)}
-              borders={effects.has('borders')}
-              borderColor={borderColorOf.get(n.id)}
-              pickable={
-                !planetData && (focusedId === null || focusedId === n.id)
-              }
-              onSelect={() => setFocusedId(n.id)}
-              focusedLot={focusedId === n.id ? buildingId : null}
-              onSelectBuilding={(lot) => setBuilding({ plate: n.id, lot })}
-              onBack={() => setBuilding(null)}
+              pickable={false}
+              onSelect={back}
             >
-              {/* What the wave of a restoration passed shows as normal. */}
-              <Sweep
-                startedAt={restoring ? restoredAt : null}
-                range={range}
-                side="behind"
-                wave
-                onDone={strikes.refresh}
+              <Scenery layout={neighbourhood.layout} />
+            </Plate>
+          ))}
+          {world.neighbourhoods.map((n) => {
+            const layout = layouts.get(n.id) ?? n.layout
+            const isNuked = nuked.has(n.id)
+            const phase = strikes.phases.get(n.id)
+            const startedAt = strikes.startedAt.get(n.id) ?? null
+            const restoredAt = strikes.restoredAt.get(n.id) ?? null
+            const range = sweepRange(layout.halfWidth, layout.halfDepth)
+            const restoring = phase === 'restoring' && restoredAt !== null
+            const sides = serviceLabelSides(layout.lots)
+            // The labels of the others are hidden then: keeping them as on the whole map spares
+            // drawing a new texture for each of them when a neighbourhood is put in focus.
+            const inFocus = focusedId === n.id
+            const buildings: BuildingProps[] = layout.lots
+              .filter((lot) => !lot.decor)
+              .map((lot) => {
+                const group = hosts.get(lot.id)!
+                // The floors are stacked from the ground up, so the first
+                // service in alphabetical order goes on the top floor.
+                const floors = [...group.services].reverse()
+                return {
+                  lot,
+                  // On the whole map, a badge alone: there is little room.
+                  name:
+                    group.host.kind === 'vm' && inFocus ? group.host.name : '',
+                  services: floors.map((s) => s.name),
+                  labelSide: sides.get(lot.id),
+                  // In focus, the services of the building up and down.
+                  badge: inFocus
+                    ? buildingBadges(
+                        group.host.kind === 'vm' ? VM_BADGE : SERVICES_BADGE,
+                        buildingCounts(group, history),
+                      )
+                    : group.host.kind === 'vm'
+                      ? SHORT_VM_BADGE
+                      : SHORT_SERVICES_BADGE,
+                  // Only the building in focus keeps its labels.
+                  muted: buildingId !== null && lot.id !== buildingId,
+                  showLabel: labels.has(
+                    group.host.kind === 'vm' ? 'vm' : 'services',
+                  ),
+                  // In ruins at once, unless it falls before our eyes.
+                  ruined: phase === 'ruins',
+                  demolished: effects.has('animations') && !isNuked,
+                  holdUntil: isNuked ? 0 : holdTime,
+                  firefighters: effects.has('animations') && !isNuked,
+                  recovering: effects.has('animations') && !isNuked,
+                  exploding: effects.has('animations') && !isNuked,
+                  roads: {
+                    x: n.x + lot.x,
+                    z: n.z + lot.z,
+                    ways: world.ways,
+                    roundabouts: world.roundabouts,
+                  },
+                  restore: restoring
+                    ? { startedAt: restoredAt, range }
+                    : undefined,
+                  state: isNuked
+                    ? nukedState(1 + group.services.length)
+                    : phase === 'incoming'
+                      ? standingState(1 + group.services.length)
+                      : buildingState(
+                          history.get(group.host.id),
+                          floors.map((s) => history.get(s.id)),
+                        ),
+                }
+              })
+            return (
+              <Plate
+                key={n.id}
+                plate={n}
+                focus={focusedId === n.id ? focus : null}
+                exploded={exploded}
+                register={register}
+                popDelay={pops.get(n.id)}
+                pose={
+                  focusFrame && focusedId
+                    ? {
+                        center: focusFrame.target,
+                        scale: focusedId === n.id ? NEAR : FAR,
+                      }
+                    : null
+                }
+                borders={effects.has('borders')}
+                borderColor={borderColorOf.get(n.id)}
+                pickable={
+                  !planetData && (focusedId === null || focusedId === n.id)
+                }
+                onSelect={() => setFocusedId(n.id)}
+                focusedLot={focusedId === n.id ? buildingId : null}
+                onSelectBuilding={(lot) => setBuilding({ plate: n.id, lot })}
+                onBack={() => setBuilding(null)}
               >
-                <Scenery layout={layout} nuked={isNuked} />
-              </Sweep>
-              {restoring && ruinedLayouts.has(n.id) && (
-                <Sweep startedAt={restoredAt} range={range} side="ahead">
-                  <Scenery layout={ruinedLayouts.get(n.id)!} nuked />
+                {/* What the wave of a restoration passed shows as normal. */}
+                <Sweep
+                  startedAt={restoring ? restoredAt : null}
+                  range={range}
+                  side="behind"
+                  wave
+                  onDone={strikes.refresh}
+                >
+                  <Scenery layout={layout} nuked={isNuked} />
+                </Sweep>
+                {restoring && ruinedLayouts.has(n.id) && (
+                  <Sweep startedAt={restoredAt} range={range} side="ahead">
+                    <Scenery layout={ruinedLayouts.get(n.id)!} nuked />
+                    <Nuke
+                      restoredAt={restoredAt}
+                      halfWidth={layout.halfWidth}
+                      halfDepth={layout.halfDepth}
+                    />
+                  </Sweep>
+                )}
+                <Buildings buildings={buildings} />
+                {isNuked && (
                   <Nuke
-                    restoredAt={restoredAt}
+                    startedAt={phase === 'struck' ? startedAt : null}
                     halfWidth={layout.halfWidth}
                     halfDepth={layout.halfDepth}
                   />
-                </Sweep>
-              )}
-              <Buildings buildings={buildings} />
-              {isNuked && (
-                <Nuke
-                  startedAt={phase === 'struck' ? startedAt : null}
-                  halfWidth={layout.halfWidth}
-                  halfDepth={layout.halfDepth}
-                />
-              )}
-              {(phase === 'incoming' || phase === 'struck') &&
-                startedAt !== null && (
-                  <Strike
-                    startedAt={startedAt}
-                    course={
-                      planetData
-                        ? // Flat on its island, the missile comes from the sky above its edge.
-                          courseFor(
-                            `${n.id}:${startedAt}`,
-                            { x: 0, z: 0 },
-                            {
-                              halfWidth: PLANET_COURSE,
-                              halfDepth: PLANET_COURSE,
-                            },
-                          )
-                        : courseFor(`${n.id}:${startedAt}`, n, world)
-                    }
-                    onImpact={strikes.refresh}
-                    onDone={strikes.refresh}
+                )}
+                {(phase === 'incoming' || phase === 'struck') &&
+                  startedAt !== null && (
+                    <Strike
+                      startedAt={startedAt}
+                      course={
+                        planetData
+                          ? // Flat on its island, the missile comes from the sky above its edge.
+                            courseFor(
+                              `${n.id}:${startedAt}`,
+                              { x: 0, z: 0 },
+                              {
+                                halfWidth: PLANET_COURSE,
+                                halfDepth: PLANET_COURSE,
+                              },
+                            )
+                          : courseFor(`${n.id}:${startedAt}`, n, world)
+                      }
+                      onImpact={strikes.refresh}
+                      onDone={strikes.refresh}
+                    />
+                  )}
+                {/* In focus, its name is shown at the top left of the view. */}
+                {focusedId !== n.id && labels.has('host') && (
+                  <Label
+                    text={names.get(n.id) ?? n.id}
+                    badge={hostBadges(hostCounts(groupOf.get(n.id)!, history))}
+                    y={2}
+                    x={-n.layout.halfWidth + 2}
+                    size={1.3}
+                    order={10}
                   />
                 )}
-              {/* In focus, its name is shown at the top left of the view. */}
-              {focusedId !== n.id && labels.has('host') && (
-                <Label
-                  text={names.get(n.id) ?? n.id}
-                  badge={hostBadges(hostCounts(groupOf.get(n.id)!, history))}
-                  y={2}
-                  x={-n.layout.halfWidth + 2}
-                  size={1.3}
-                  order={10}
-                />
-              )}
-            </Plate>
-          )
-        })}
-        <Planes
-          airport={airport}
-          groups={plateGroups.current}
-          nuked={nuked}
-          visible={effects.has('vehicles')}
-          density={densities.vehicles}
-          cruise={cruiseHeight(top)}
-        />
-        {/* In focus, they would fly in front of what is shown. */}
-        {planetData ? (
-          <PlanetFlights
-            radius={planetData.radius}
+              </Plate>
+            )
+          })}
+          <Planes
+            airport={airport}
+            groups={plateGroups.current}
+            nuked={nuked}
+            visible={effects.has('vehicles')}
+            density={densities.vehicles}
+            cruise={cruiseHeight(top)}
+          />
+          {/* In focus, they would fly in front of what is shown. */}
+          {planetData ? (
+            <PlanetFlights
+              radius={planetData.radius}
+              visible={effects.has('vehicles')}
+              density={densities.vehicles}
+            />
+          ) : (
+            <Overflights
+              bounds={world}
+              cruise={cruiseHeight(top)}
+              visible={!focusedId && effects.has('vehicles')}
+              density={densities.vehicles}
+            />
+          )}
+          <Traffic
+            ways={world.ways}
+            roundabouts={world.roundabouts}
+            plots={plots}
+            groups={plateGroups.current}
+            nuked={nuked}
             visible={effects.has('vehicles')}
             density={densities.vehicles}
           />
-        ) : (
-          <Overflights
-            bounds={world}
-            cruise={cruiseHeight(top)}
-            visible={!focusedId && effects.has('vehicles')}
+          <Trains
+            track={world.track}
+            plots={plots}
+            groups={plateGroups.current}
+            nuked={nuked}
+            visible={effects.has('vehicles')}
             density={densities.vehicles}
           />
-        )}
-        <Traffic
-          ways={world.ways}
-          roundabouts={world.roundabouts}
-          plots={plots}
-          groups={plateGroups.current}
-          nuked={nuked}
-          visible={effects.has('vehicles')}
-          density={densities.vehicles}
-        />
-        <Trains
-          track={world.track}
-          plots={plots}
-          groups={plateGroups.current}
-          nuked={nuked}
-          visible={effects.has('vehicles')}
-          density={densities.vehicles}
-        />
-      </Canvas>
+        </Canvas>
+      )}
       {buildingId && hosts.get(buildingId) && (
         <BuildingPanel
           name={hosts.get(buildingId)!.host.name}

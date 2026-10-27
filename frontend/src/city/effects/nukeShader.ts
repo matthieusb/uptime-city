@@ -8,6 +8,8 @@
 // ragged edges and a burning-away fade. All the shaders honour the clipping planes of
 // `Sweep.tsx` (the restoration wave), which is why they include three's clipping chunks and set
 // `clipping: true`. No real light is involved.
+// The nuke places its vertices through the chunk that bends them on the planet.
+import '../planet/bendPatch'
 import {
   AdditiveBlending,
   Color,
@@ -111,6 +113,7 @@ varying vec3 vNoise;
 varying float vHeight;
 
 #include <clipping_planes_pars_vertex>
+#include <planet_pars_vertex>
 
 ${NOISE}
 
@@ -152,7 +155,7 @@ void main() {
   vNoise = np;
   vHeight = height;
 
-  vec4 mvPosition = modelViewMatrix * vec4(displaced, 1.0);
+  vec4 mvPosition = planetView(vec4(displaced, 1.0));
   gl_Position = projectionMatrix * mvPosition;
 #include <clipping_planes_vertex>
 }
@@ -222,15 +225,16 @@ export const GLOW_VERTEX = /* glsl */ `
 varying vec2 vUv;
 
 #include <clipping_planes_pars_vertex>
+#include <planet_pars_vertex>
 
 void main() {
   vUv = uv;
   vec4 mvPosition;
 #ifdef BILLBOARD
-  mvPosition = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+  mvPosition = planetView(vec4(0.0, 0.0, 0.0, 1.0));
   mvPosition.xy += position.xy * length(modelViewMatrix[0].xyz);
 #else
-  mvPosition = modelViewMatrix * vec4(position, 1.0);
+  mvPosition = planetView(vec4(position, 1.0));
 #endif
   gl_Position = projectionMatrix * mvPosition;
 #include <clipping_planes_vertex>

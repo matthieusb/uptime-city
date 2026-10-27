@@ -14,7 +14,6 @@ import { cityLayout } from '../layout'
 import { sizeScore, sizesOf } from '../map/sizing'
 import { setWorldSeed, worldSeed } from '../seed'
 import { withDecor, type NeighbourhoodSpec } from '../world'
-import { layBridges, type Bridge } from './bridges'
 import { islandReach, type Island } from './island'
 import {
   add,
@@ -28,21 +27,26 @@ import {
   type Vec3,
 } from './sphere'
 
-export { islandPoint, type Island } from './island'
-export type { Bridge } from './bridges'
+export type { Island } from './island'
 
 export interface Planet {
   // The radius of the sea level.
   radius: number
   islands: Island[]
-  bridges: Bridge[]
+  // The atlas the islands are drawn in, bent onto the sphere (see bend.ts): they lie in a grid of
+  // square cells of this size, `columns` to a row, island i in cell (i mod columns, i div columns).
+  cell: number
+  columns: number
 }
 
 // The share of the sphere that islands cover at first, before they are pushed apart.
-const COVERAGE = 0.25
-// A flat island of reach r over a sphere of radius R floats r²/2R above it at its corners:
-// this many reaches keeps that under a sixth of the reach.
-const MIN_RADIUS_IN_REACHES = 3
+const COVERAGE = 0.35
+// The sphere is at least this many reaches wide: an island is bent onto it, and a smaller sphere
+// would fold it round.
+const MIN_RADIUS_IN_REACHES = 2
+// How far from the middle of its island, past its edge, something of the island may be (a
+// missile that comes at it) and still be bent with it.
+const OUTSIDE = 50
 // The sea kept free between two islands, for a bridge.
 const GAP = 8
 // The sphere grows by this much each time the islands do not fit.
@@ -96,7 +100,7 @@ export function planetLayout(specs: NeighbourhoodSpec[], seed: string): Planet {
 }
 
 function lay(specs: NeighbourhoodSpec[]): Planet {
-  if (specs.length === 0) return { radius: 0, islands: [], bridges: [] }
+  if (specs.length === 0) return { radius: 0, islands: [], cell: 0, columns: 1 }
   const items = specs.map(withDecor)
   const natural = items.map((hosts) => cityLayout(hosts))
   const sizes = sizesOf(
@@ -166,6 +170,8 @@ function lay(specs: NeighbourhoodSpec[]): Planet {
       center: scale(normal, radius),
       xAxis,
       zAxis,
+      x: 0,
+      z: 0,
     }
   })
   // The real plates may be a little bigger than the sizes: the sea grows if they touch.
@@ -183,5 +189,12 @@ function lay(specs: NeighbourhoodSpec[]): Planet {
     radius *= GROWTH
     islands.forEach((island) => (island.center = scale(island.normal, radius)))
   }
-  return { radius, islands, bridges: layBridges(radius, islands) }
+  // Each island has a cell of the atlas, big enough for it and its surroundings.
+  const cell = 2 * (Math.max(...islands.map(islandReach)) + OUTSIDE)
+  const columns = Math.ceil(Math.sqrt(islands.length))
+  islands.forEach((island, i) => {
+    island.x = (i % columns) * cell
+    island.z = Math.floor(i / columns) * cell
+  })
+  return { radius, islands, cell, columns }
 }

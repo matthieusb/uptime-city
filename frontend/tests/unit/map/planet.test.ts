@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { setWorldSeed, worldSeed } from '../../../src/city/seed'
 import {
-  islandPoint,
   planetLayout,
   type Island,
   type Planet,
 } from '../../../src/city/planet/planet'
-import { angleBetween, dot, length, sub } from '../../../src/city/planet/sphere'
+import { angleBetween, dot, length } from '../../../src/city/planet/sphere'
 import { big, hosts } from './helpers'
 
 const reach = (island: Island) =>
@@ -19,7 +18,6 @@ describe('planetLayout', () => {
   it('is empty without a host', () => {
     const planet = planetLayout([], 'seed')
     expect(planet.islands).toEqual([])
-    expect(planet.bridges).toEqual([])
   })
 
   it('makes one island per physical host, with no joining tile', () => {
@@ -65,11 +63,25 @@ describe('planetLayout', () => {
     }
   })
 
-  it('is big enough for a flat island not to float far above the sea', () => {
+  it('is big enough for an island not to fold round it when it is bent', () => {
     const planet = planetLayout(big, 'seed')
     for (const island of planet.islands) {
-      expect(planet.radius).toBeGreaterThanOrEqual(3 * reach(island))
+      expect(planet.radius).toBeGreaterThanOrEqual(2 * reach(island))
     }
+  })
+
+  it('draws the islands in a grid of cells, one each, wide enough for their surroundings', () => {
+    const planet = planetLayout(big, 'seed')
+    expect(planet.columns).toBe(Math.ceil(Math.sqrt(big.length)))
+    const places = planet.islands.map(
+      (island) => `${island.x / planet.cell}|${island.z / planet.cell}`,
+    )
+    expect(new Set(places).size).toBe(planet.islands.length)
+    planet.islands.forEach((island, i) => {
+      expect(island.x).toBe((i % planet.columns) * planet.cell)
+      expect(island.z).toBe(Math.floor(i / planet.columns) * planet.cell)
+      expect(planet.cell / 2).toBeGreaterThan(reach(island) + 40)
+    })
   })
 
   it('grows with the number of islands', () => {
@@ -93,20 +105,5 @@ describe('planetLayout', () => {
       expect(island.layout.biomes.main).not.toBe('coastal')
       expect(island.layout.biomes.second).not.toBe('coastal')
     }
-  })
-})
-
-describe('islandPoint', () => {
-  it('puts the middle of an island on its center, and a corner on its plane', () => {
-    const planet = planetLayout(hosts, 'seed')
-    const island = planet.islands[0]
-    expect(islandPoint(island, 0, 0, 0)).toEqual(island.center)
-    const corner = islandPoint(island, island.layout.halfWidth, 0, 0)
-    expect(length(sub(corner, island.center))).toBeCloseTo(
-      island.layout.halfWidth,
-      9,
-    )
-    const up = islandPoint(island, 0, 0, 5)
-    expect(length(up)).toBeCloseTo(planet.radius + 5, 9)
   })
 })

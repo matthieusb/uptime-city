@@ -17,7 +17,7 @@ export default function PlanetFlights({
   // How many planes, as a multiple of the normal count.
   density: number
 }) {
-  const { place, bodies } = usePlanePool(SKY_PLANES)
+  const { place, bodies } = usePlanePool(SKY_PLANES, true)
   const count = overflightCount(density)
   const frame = useMemo(() => new Quaternion(), [])
   const basis = useMemo(() => new Matrix4(), [])
