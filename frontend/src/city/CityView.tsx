@@ -1,4 +1,4 @@
-import { MapControls } from '@react-three/drei'
+import { MapControls, OrbitControls } from '@react-three/drei'
 import { Canvas, useThree } from '@react-three/fiber'
 import { useQueries } from '@tanstack/react-query'
 import {
@@ -101,6 +101,11 @@ import {
 import Plate from './Plate'
 import Scenery from './Scenery'
 import { findAirport } from './airport'
+import Bridges from './planet/Bridges'
+import PlanetFlights from './planet/PlanetFlights'
+import PlanetSea from './planet/PlanetSea'
+import { planetLayout } from './planet/planet'
+import { planetWorld } from './planet/planetWorld'
 import { nukedLayout, worldFrame, worldLayout, type Frame } from './world'
 
 // Render at the screen's native resolution (up to 2x on hi-dpi screens). The
@@ -145,6 +150,9 @@ function offset(frame: Frame): [number, number, number] {
 // Smaller maps are framed as if they had a building this tall.
 const MIN_TOP = 6
 
+// How far from the middle of an island a missile launched at it starts, on the planet.
+const PLANET_COURSE = 40
+
 const VM_BADGE = badgeOf('vm')
 const SERVICES_BADGE = badgeOf('services')
 const SHORT_VM_BADGE = shortBadgeOf('vm')
@@ -156,6 +164,9 @@ export default function CityView({
   refreshMenu,
   seed = '',
   onRegenerate,
+  planet = false,
+  planetSeed = '',
+  onTogglePlanet,
 }: {
   endpoints: EndpointInfo[]
   // The name of the lab, set in the backend's config, over the whole map.
@@ -166,6 +177,11 @@ export default function CityView({
   seed?: string
   // Asks for another city, with a new seed.
   onRegenerate?: () => void
+  // Whether the planet is shown in place of the flat map, what its layout is drawn from, and the
+  // switch between the two.
+  planet?: boolean
+  planetSeed?: string
+  onTogglePlanet?: () => void
 }) {
   // One neighbourhood per physical host, one building per vm-host and one for
   // the physical host itself, and one floor per service.
@@ -179,9 +195,8 @@ export default function CityView({
     combine: (results) =>
       new Map(endpoints.map((e, i) => [e.id, results[i].data])),
   })
-  const world = useMemo(() => {
-    setWorldSeed(seed)
-    return worldLayout(
+  const specs = useMemo(
+    () =>
       groups.map((group) => ({
         id: group.host.id,
         buildings: [group, ...group.vms].map((vmGroup) => ({
@@ -189,8 +204,23 @@ export default function CityView({
           services: vmGroup.services.length,
         })),
       })),
-    )
-  }, [groups, seed])
+    [groups],
+  )
+  // On the planet, the islands stand flat on a sphere, with bridges between them.
+  const planetData = useMemo(
+    () => (planet ? planetLayout(specs, planetSeed) : null),
+    [planet, specs, planetSeed],
+  )
+  const islandOf = useMemo(
+    () =>
+      new Map(planetData?.islands.map((island) => [island.id, island]) ?? []),
+    [planetData],
+  )
+  const world = useMemo(() => {
+    if (planetData) return planetWorld(planetData)
+    setWorldSeed(seed)
+    return worldLayout(specs)
+  }, [planetData, specs, seed])
   const groupOf = useMemo(
     () => new Map(groups.map((hostGroup) => [hostGroup.host.id, hostGroup])),
     [groups],
@@ -487,13 +517,16 @@ export default function CityView({
     [world],
   )
   const lift = focus ? Math.hypot(...focus.lift) : 0
-  const shadowBox = Math.hypot(world.halfWidth, world.halfDepth) + 4 + lift
+  const shadowBox = planetData
+    ? planetData.radius + 40
+    : Math.hypot(world.halfWidth, world.halfDepth) + 4 + lift
   const lightDistance = shadowBox * 1.5 + 50
 
   return (
     <div ref={view} className="city" data-testid="city-view">
       <Canvas
-        orthographic
+        key={planetData ? 'planet' : 'flat'}
+        orthographic={!planetData}
         dpr={PIXEL_RATIO}
         gl={{ antialias: false }}
         shadows="basic"
@@ -502,27 +535,54 @@ export default function CityView({
           gl.localClippingEnabled = true
         }}
         onPointerMissed={back}
-        camera={{
-          position: cameraPosition(frame),
-          near: 0.1,
-          far: 4 * frame.distance,
-        }}
+        camera={
+          planetData
+            ? {
+                position: [0, 0, 3 * planetData.radius],
+                near: 1,
+                far: 12 * planetData.radius,
+                fov: 40,
+              }
+            : {
+                position: cameraPosition(frame),
+                near: 0.1,
+                far: 4 * frame.distance,
+              }
+        }
       >
-        <FitCamera frame={frame} />
         <ShadowPacer />
-        <CameraRig
-          offset={offset(frame)}
-          focusFrame={buildingFocus ?? focusFrame}
-        />
-        <Backdrop focus={focus} frame={frame} onClose={back} />
-        <MapControls
-          makeDefault
-          enableRotate={false}
-          screenSpacePanning
-          minZoom={MIN_ZOOM}
-          maxZoom={MAX_ZOOM}
-          target={frame.target}
-        />
+        {planetData ? (
+          // The globe turns under the pointer; there is no focus view on it.
+          <OrbitControls
+            makeDefault
+            enablePan={false}
+            minDistance={1.3 * planetData.radius}
+            maxDistance={6 * planetData.radius}
+          />
+        ) : (
+          <>
+            <FitCamera frame={frame} />
+            <CameraRig
+              offset={offset(frame)}
+              focusFrame={buildingFocus ?? focusFrame}
+            />
+            <Backdrop focus={focus} frame={frame} onClose={back} />
+            <MapControls
+              makeDefault
+              enableRotate={false}
+              screenSpacePanning
+              minZoom={MIN_ZOOM}
+              maxZoom={MAX_ZOOM}
+              target={frame.target}
+            />
+          </>
+        )}
+        {planetData && (
+          <>
+            <PlanetSea radius={planetData.radius} />
+            <Bridges bridges={planetData.bridges} />
+          </>
+        )}
         <hemisphereLight args={['#dff3ff', '#5a4a3a', 1.2]} />
         <directionalLight
           position={[
@@ -541,13 +601,15 @@ export default function CityView({
           shadow-camera-far={4 * lightDistance}
         />
         {/* In focus, they would drift in front of what is shown. */}
-        <Clouds
-          halfWidth={world.halfWidth}
-          halfDepth={world.halfDepth}
-          height={top + 2}
-          visible={!focusedId && effects.has('clouds')}
-          density={densities.clouds}
-        />
+        {!planetData && (
+          <Clouds
+            halfWidth={world.halfWidth}
+            halfDepth={world.halfDepth}
+            height={top + 2}
+            visible={!focusedId && effects.has('clouds')}
+            density={densities.clouds}
+          />
+        )}
         {world.wilds.map((neighbourhood) => (
           <Plate
             key={neighbourhood.id}
@@ -650,9 +712,12 @@ export default function CityView({
                     }
                   : null
               }
+              placement={islandOf.get(n.id)}
               borders={effects.has('borders')}
               borderColor={borderColorOf.get(n.id)}
-              pickable={focusedId === null || focusedId === n.id}
+              pickable={
+                !planetData && (focusedId === null || focusedId === n.id)
+              }
               onSelect={() => setFocusedId(n.id)}
               focusedLot={focusedId === n.id ? buildingId : null}
               onSelectBuilding={(lot) => setBuilding({ plate: n.id, lot })}
@@ -690,7 +755,19 @@ export default function CityView({
                 startedAt !== null && (
                   <Strike
                     startedAt={startedAt}
-                    course={courseFor(`${n.id}:${startedAt}`, n, world)}
+                    course={
+                      planetData
+                        ? // Flat on its island, the missile comes from the sky above its edge.
+                          courseFor(
+                            `${n.id}:${startedAt}`,
+                            { x: 0, z: 0 },
+                            {
+                              halfWidth: PLANET_COURSE,
+                              halfDepth: PLANET_COURSE,
+                            },
+                          )
+                        : courseFor(`${n.id}:${startedAt}`, n, world)
+                    }
                     onImpact={strikes.refresh}
                     onDone={strikes.refresh}
                   />
@@ -718,12 +795,20 @@ export default function CityView({
           cruise={cruiseHeight(top)}
         />
         {/* In focus, they would fly in front of what is shown. */}
-        <Overflights
-          bounds={world}
-          cruise={cruiseHeight(top)}
-          visible={!focusedId && effects.has('vehicles')}
-          density={densities.vehicles}
-        />
+        {planetData ? (
+          <PlanetFlights
+            radius={planetData.radius}
+            visible={effects.has('vehicles')}
+            density={densities.vehicles}
+          />
+        ) : (
+          <Overflights
+            bounds={world}
+            cruise={cruiseHeight(top)}
+            visible={!focusedId && effects.has('vehicles')}
+            density={densities.vehicles}
+          />
+        )}
         <Traffic
           ways={world.ways}
           roundabouts={world.roundabouts}
@@ -774,7 +859,12 @@ export default function CityView({
         <Toolbox
           onRegenerate={onRegenerate}
           exploded={exploded}
-          onToggleExploded={() => setExploded((e) => !e)}
+          // The exploded view is a setting of the flat map.
+          onToggleExploded={
+            planetData ? undefined : () => setExploded((e) => !e)
+          }
+          planet={planetData !== null}
+          onTogglePlanet={onTogglePlanet}
         />
       )}
       {!focusedId && (

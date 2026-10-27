@@ -89,3 +89,47 @@ it('switches the exploded view with a button next to the toolbox one', async () 
       .getAttribute('aria-pressed'),
   ).toBe('true')
 })
+
+it('has no planet button without a switch for it', () => {
+  render(<Toolbox onRegenerate={vi.fn()} />)
+
+  expect(screen.queryByRole('button', { name: 'Planet view' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Flat plan' })).toBeNull()
+})
+
+it('shows the planet icon on the flat plan, and switches to the planet', async () => {
+  const onTogglePlanet = vi.fn()
+  render(<Toolbox onRegenerate={vi.fn()} onTogglePlanet={onTogglePlanet} />)
+  const button = screen.getByRole('button', { name: 'Planet view' })
+  expect(button.textContent).toBe('🪐')
+
+  await userEvent.click(button)
+  expect(onTogglePlanet).toHaveBeenCalledTimes(1)
+})
+
+it('shows a flat plan icon on the planet, to go back to the plan', async () => {
+  const onTogglePlanet = vi.fn()
+  render(
+    <Toolbox onRegenerate={vi.fn()} planet onTogglePlanet={onTogglePlanet} />,
+  )
+  expect(screen.queryByRole('button', { name: 'Planet view' })).toBeNull()
+  const button = screen.getByRole('button', { name: 'Flat plan' })
+  expect(button.textContent).toBe('🗺️')
+
+  await userEvent.click(button)
+  expect(onTogglePlanet).toHaveBeenCalledTimes(1)
+})
+
+it('puts the planet button right of the exploded one, next to the toolbox one', () => {
+  render(
+    <Toolbox
+      onRegenerate={vi.fn()}
+      onToggleExploded={vi.fn()}
+      onTogglePlanet={vi.fn()}
+    />,
+  )
+  const names = screen
+    .getAllByRole('button')
+    .map((button) => button.getAttribute('aria-label'))
+  expect(names).toEqual(['Exploded view', 'Planet view', 'Toolbox'])
+})

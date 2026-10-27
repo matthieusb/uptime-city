@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { MeshLambertMaterial, type Group } from 'three'
+import { MeshLambertMaterial, type Group, type Quaternion } from 'three'
 import type { Airport } from './airport'
 import {
   LIVERIES,
@@ -154,6 +154,8 @@ export function usePlanePool(count = MAX_PLANES): {
     state: PlaneState | null,
     at: [number, number, number],
     k: number,
+    // Turns the plane as a whole, after its heading and pitch: on the planet, where up is not Y.
+    frame?: Quaternion,
   ) => void
   bodies: ReactNode
 } {
@@ -168,6 +170,7 @@ export function usePlanePool(count = MAX_PLANES): {
     state: PlaneState | null,
     at: [number, number, number],
     k: number,
+    frame?: Quaternion,
   ) => {
     const node = nodes.current[i]
     if (!node) return
@@ -179,6 +182,7 @@ export function usePlanePool(count = MAX_PLANES): {
     node.position.set(...at)
     node.scale.setScalar(k)
     node.rotation.set(0, state.heading, state.pitch)
+    if (frame) node.quaternion.premultiply(frame)
     const look = `${state.kind}:${state.livery}`
     if (looks.current[i] !== look) {
       looks.current[i] = look

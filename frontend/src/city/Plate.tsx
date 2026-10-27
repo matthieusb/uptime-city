@@ -1,12 +1,13 @@
 import { Line } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { LabelsHidden } from './Buildings'
 import { borderRing } from './borders'
-import { Mesh, type Group } from 'three'
+import { Matrix4, Mesh, Quaternion, Vector3, type Group } from 'three'
 import { type Lot } from './layout'
 import { approach, type Focus, type Pose } from './focus'
 import { popScale } from './pop'
+import type { Island } from './planet/island'
 import type { Neighbourhood } from './world'
 
 // Height of the flat part that catches the pointer, above the hills.
@@ -44,6 +45,9 @@ interface Props {
   borderColor?: string
   // Whether the exploded view is on: the tiles are set a little apart.
   exploded?: boolean
+  // On the planet: where the island stands and how it lies on the sphere, in place of its x and
+  // z on the flat map. It never moves apart nor into focus.
+  placement?: Pick<Island, 'center' | 'normal' | 'xAxis' | 'zAxis'>
   // A joining tile, which only follows the others: it is never picked.
   inert?: boolean
   // Tells where its group is, for what drives across the plates (the traffic), or that it is gone.
@@ -70,6 +74,7 @@ export default function Plate({
   borderColor = '#ffffff',
   exploded = false,
   inert = false,
+  placement,
   register,
   popDelay,
   onSelect,
@@ -92,6 +97,20 @@ export default function Plate({
   // The last lift stays, to come back down after the focus is gone.
   const lift = useRef<Focus['lift']>([0, 0, 0])
   if (focus) lift.current = focus.lift
+  // Its up is the normal of the sphere there, its X and Z the tangent axes.
+  const orientation = useMemo(
+    () =>
+      placement
+        ? new Quaternion().setFromRotationMatrix(
+            new Matrix4().makeBasis(
+              new Vector3(...placement.xAxis),
+              new Vector3(...placement.normal),
+              new Vector3(...placement.zAxis),
+            ),
+          )
+        : null,
+    [placement],
+  )
   const pickable = canPick && !inert
   const [hovered, setHovered] = useState(false)
   // The building under the pointer, to pick in focus view.
@@ -106,6 +125,12 @@ export default function Plate({
       popDelay === undefined
         ? 1
         : popScale(clock.elapsedTime - born.current, popDelay)
+    if (placement && orientation) {
+      group.current?.position.set(...placement.center)
+      group.current?.quaternion.copy(orientation)
+      group.current?.scale.setScalar(Math.max(pop, UNPOPPED))
+      return
+    }
     const t = (lifted.current = approach(lifted.current, pose ? 1 : 0, delta))
     apart.current = approach(apart.current, exploded ? 1 : 0, delta, 5)
     // The focus view takes over, and the tiles come back together under it.

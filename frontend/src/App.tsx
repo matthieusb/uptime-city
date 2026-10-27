@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import {
   fetchCity,
   fetchEndpoints,
@@ -33,6 +33,8 @@ export default function App() {
     queryFn: fetchEndpoints,
   })
   const queryClient = useQueryClient()
+  // The planet in place of the flat plan.
+  const [planet, setPlanet] = useState(false)
   // What the layout of the city is drawn from.
   const { data: city } = useQuery({ queryKey: ['city'], queryFn: fetchCity })
   const regenerate = useMutation({
@@ -83,6 +85,8 @@ export default function App() {
               labName={info?.lab_name}
               seed={city.seed}
               onRegenerate={() => regenerate.mutate()}
+              planet={planet}
+              onTogglePlanet={() => setPlanet((now) => !now)}
               refreshMenu={
                 <RefreshSelector
                   value={refresh}
