@@ -8,6 +8,8 @@ ROUTES = {
     ("get", "/api/v1/info"),
     ("get", "/api/v1/city"),
     ("post", "/api/v1/city/regenerate"),
+    ("get", "/api/v1/planet"),
+    ("post", "/api/v1/planet/regenerate"),
     ("get", "/api/v1/endpoints"),
     ("get", "/api/v1/endpoints/{endpoint_id}/history"),
     ("post", "/api/v1/simulation/refresh"),
