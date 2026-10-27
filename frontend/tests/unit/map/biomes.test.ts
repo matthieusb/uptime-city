@@ -318,7 +318,7 @@ describe('the biomes of the map', () => {
     ).toBeGreaterThanOrEqual(4)
   })
 
-  it('only has coastal plates and the sea along the front edge', () => {
+  it('only has coastal plates along the front edge, and the sea along the front or a side edge', () => {
     for (const n of plates) {
       const { main, second } = n.layout.biomes
       if (main === 'coastal' || second === 'coastal') {
@@ -334,7 +334,10 @@ describe('the biomes of the map', () => {
     ).toBe(true)
     for (const t of allTiles) {
       if (t.kind === 'water' || t.kind === 'shallow') {
-        expect(world.halfDepth - t.z).toBeLessThan(10)
+        // The sea is along the front edge, or along a side edge (see `carveSeas`).
+        expect(
+          Math.min(world.halfDepth - t.z, world.halfWidth - Math.abs(t.x)),
+        ).toBeLessThan(10)
       }
     }
   })

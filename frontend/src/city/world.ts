@@ -438,8 +438,8 @@ const SEA_EXTRA = 4
 const SEA_KEEPOUT = 2
 
 // A sea may lie along the left or the right edge of the map, whatever the
-// biomes there: its shore is wavy, and it leaves roads, monitored buildings
-// and what is around them dry. What stood in it is gone, a tennis club whole.
+// biomes there: its shore is wavy, and it leaves roads, the railway, monitored
+// buildings and what is around them dry. What stood in it is gone, a tennis club whole.
 function carveSeas(world: World): World {
   const seas = (['left', 'right'] as const).flatMap((side) =>
     noise(`sea:${side}`) < SEA_CHANCE
@@ -981,7 +981,7 @@ export function worldLayout(specs: NeighbourhoodSpec[]): World {
   }
   return clearWilds(
     placeMonuments(
-      placeAirport(blendSeams(layTracks(carveSeas(layRoads(world))))),
+      placeAirport(blendSeams(carveSeas(layTracks(layRoads(world))))),
     ),
   )
 }

@@ -71,7 +71,7 @@ How they are applied (`layRoads` in `src/city/world.ts`, `layPath` in `src/city/
 ## Track rules
 
 - One double track of ballast, sleepers and rails runs in a straight line from one edge of the map to the opposite one, near the back edge (-Z) or the left edge (-X), whichever strip has the fewest obstacles.
-- It never goes over a monitored building, a roundabout or the sea. Trees, structures (a tennis club whole) and hills on it are removed or levelled, as for roads.
+- It never goes over a monitored building, a roundabout or the sea (a side sea leaves it dry, like roads). Trees, structures (a tennis club whole) and hills on it are removed or levelled, as for roads.
 - A road it meets stays usable, with a level crossing and a few marks.
 - Trains (a locomotive and carriages, passenger and freight, and about one in four a streamlined TGV; the trains go 2 times as fast as the cars, the TGV 5 times) run its whole length, one track for each way, coming in at one edge and going out at the other, fading in and out near the edges. One passes about every 60 seconds at the normal density of the vehicles, every 30 at twice, none at 0; the tracks always show.
 
