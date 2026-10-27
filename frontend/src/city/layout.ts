@@ -109,6 +109,9 @@ export const CRATER_TOP = TOPS.crater
 // Height of the top of plain ground, and of the island of a roundabout.
 export const GRASS_TOP = TOPS.grass
 export const ISLAND_TOP = TOPS.island
+// Height of the top of the sea, and of its shallows.
+export const WATER_TOP = TOPS.water
+export const SHALLOW_TOP = TOPS.shallow
 // Height of the top of paved ground (plazas, the airport).
 export const PLAZA_TOP = TOPS.plaza
 export const HILL_STEP = 0.5

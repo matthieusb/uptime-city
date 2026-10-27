@@ -24,7 +24,9 @@ import {
   ISLAND_TOP,
   PLAZA_MARGIN,
   ROAD_TOP,
+  SHALLOW_TOP,
   TREE_HEIGHTS,
+  WATER_TOP,
   type CityLayout,
   type DecorKind,
   type HostSpec,
@@ -413,6 +415,131 @@ function layRoads(world: World): World {
     wilds: world.wilds.map(lay),
     ways,
     roundabouts,
+  }
+}
+
+// Ground the sea of a side edge may cover.
+const SEA_GROUND = new Set<TileKind>([
+  'grass',
+  'hill',
+  'sand',
+  'snow',
+  'pond',
+  'ice',
+  'path',
+  'court',
+])
+// The chance of a sea along each of the left and right edges of the map, and
+// how deep (in tiles) it is at least, and by how much more at most.
+const SEA_CHANCE = 0.5
+const SEA_DEPTH = 4
+const SEA_EXTRA = 4
+// Tiles kept dry around the paved square of a monitored building.
+const SEA_KEEPOUT = 2
+
+// A sea may lie along the left or the right edge of the map, whatever the
+// biomes there: its shore is wavy, and it leaves roads, monitored buildings
+// and what is around them dry. What stood in it is gone, a tennis club whole.
+function carveSeas(world: World): World {
+  const seas = (['left', 'right'] as const).flatMap((side) =>
+    noise(`sea:${side}`) < SEA_CHANCE
+      ? [
+          {
+            side,
+            depth: SEA_DEPTH + SEA_EXTRA * noise(`sea:${side}:depth`),
+            phase: 6 * noise(`sea:${side}:phase`),
+          },
+        ]
+      : [],
+  )
+  if (seas.length === 0) return world
+  const W = world.halfWidth
+  const lots = world.neighbourhoods.flatMap((n) =>
+    n.layout.lots.map((l) => ({ ...l, x: l.x + n.x, z: l.z + n.z })),
+  )
+  const wet = (t: Tile, x: number, z: number): 'water' | 'shallow' | null => {
+    if (!SEA_GROUND.has(t.kind)) return null
+    if (
+      lots.some(
+        (l) =>
+          Math.max(Math.abs(x - l.x), Math.abs(z - l.z)) <
+          l.width / 2 + PLAZA_MARGIN + SEA_KEEPOUT,
+      )
+    ) {
+      return null
+    }
+    for (const { side, depth, phase } of seas) {
+      const from = side === 'left' ? x + W : W - x
+      const reach =
+        depth + 1.2 * Math.sin(z / 4.1 + phase) + 0.6 * Math.sin(z / 1.9)
+      if (from < reach) return from < reach - 1.5 ? 'water' : 'shallow'
+    }
+    return null
+  }
+  const at = (x: number, z: number) =>
+    `${Math.round(2 * x)},${Math.round(2 * z)}`
+  const carve = (n: Neighbourhood): Neighbourhood => {
+    const drowned = new Set<string>()
+    const tiles = n.layout.tiles.map((t): Tile => {
+      const kind = wet(t, n.x + t.x, n.z + t.z)
+      if (!kind) return t
+      drowned.add(at(t.x, t.z))
+      return { ...t, kind, top: kind === 'water' ? WATER_TOP : SHALLOW_TOP }
+    })
+    if (drowned.size === 0) return n
+    // Tiles are on whole or half coordinates, the same for the whole plate.
+    const [own] = n.layout.tiles
+    const fx = own.x - Math.floor(own.x)
+    const fz = own.z - Math.floor(own.z)
+    const under = (p: { x: number; z: number }) =>
+      drowned.has(at(Math.round(p.x - fx) + fx, Math.round(p.z - fz) + fz))
+    const covers = (s: {
+      x: number
+      z: number
+      width: number
+      depth: number
+    }) =>
+      [...Array(s.width).keys()].some((di) =>
+        [...Array(s.depth).keys()].some((dj) =>
+          drowned.has(
+            at(s.x - (s.width - 1) / 2 + di, s.z - (s.depth - 1) / 2 + dj),
+          ),
+        ),
+      )
+    const club = (s: { kind: string }) =>
+      s.kind === 'tennis' || s.kind === 'clubhouse'
+    const clubHit = n.layout.structures.some((s) => club(s) && covers(s))
+    const goes = (s: (typeof n.layout.structures)[number]) =>
+      covers(s) || (clubHit && club(s))
+    const removed = n.layout.structures.filter(goes)
+    const bare = (t: Tile) =>
+      removed.some(
+        (s) =>
+          Math.abs(t.x - s.x) < s.width / 2 &&
+          Math.abs(t.z - s.z) < s.depth / 2,
+      )
+    return {
+      ...n,
+      layout: {
+        ...n.layout,
+        tiles: tiles.map((t) =>
+          !drowned.has(at(t.x, t.z)) && bare(t)
+            ? { ...t, kind: 'grass', top: GRASS_TOP }
+            : t,
+        ),
+        trees: n.layout.trees.filter((p) => !under(p)),
+        flowers: n.layout.flowers.filter((p) => !under(p)),
+        reeds: n.layout.reeds.filter((p) => !under(p)),
+        rocks: n.layout.rocks.filter((p) => !under(p)),
+        umbrellas: n.layout.umbrellas.filter((p) => !under(p)),
+        structures: n.layout.structures.filter((s) => !goes(s)),
+      },
+    }
+  }
+  return {
+    ...world,
+    neighbourhoods: world.neighbourhoods.map(carve),
+    wilds: world.wilds.map(carve),
   }
 }
 
@@ -853,7 +980,9 @@ export function worldLayout(specs: NeighbourhoodSpec[]): World {
     world = build(extra)
   }
   return clearWilds(
-    placeMonuments(placeAirport(blendSeams(layTracks(layRoads(world))))),
+    placeMonuments(
+      placeAirport(blendSeams(layTracks(carveSeas(layRoads(world))))),
+    ),
   )
 }
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { setWorldSeed } from '../../../src/city/seed'
 import {
   nukedLayout,
   sizeScore,
@@ -329,5 +330,56 @@ describe('nukedLayout', () => {
   it('leaves the original layout alone', () => {
     expect(plate.tiles.some((t) => t.kind === 'crater')).toBe(false)
     expect(plate.trees.length).toBeGreaterThan(0)
+  })
+})
+
+describe('seas on the side edges', () => {
+  const seeds = Array.from({ length: 40 }, (_, i) => `sea-${i}`)
+  const wet = (kind: string) => kind === 'water' || kind === 'shallow'
+  // Whether the left or right edge columns of the map hold sea.
+  const edges = (seed: string) => {
+    setWorldSeed(seed)
+    const world = worldLayout(homelab)
+    const plates = [...world.neighbourhoods, ...world.wilds]
+    const tiles = plates.flatMap((n) =>
+      n.layout.tiles.map((t) => ({ ...t, x: n.x + t.x, z: n.z + t.z })),
+    )
+    const sea = (side: 1 | -1) =>
+      tiles.some((t) => wet(t.kind) && side * t.x > world.halfWidth - 3)
+    return { world, left: sea(-1), right: sea(1) }
+  }
+
+  it('lies along the left or right edge on some maps and not on others', () => {
+    const all = seeds.map(edges)
+    expect(all.some((e) => e.left)).toBe(true)
+    expect(all.some((e) => e.right)).toBe(true)
+    expect(all.some((e) => !e.left && !e.right)).toBe(true)
+    setWorldSeed('')
+  }, 30000)
+
+  it('never covers a monitored building, a road or a tree', () => {
+    for (const seed of seeds.slice(0, 15)) {
+      const { world } = edges(seed)
+      const plates = [...world.neighbourhoods, ...world.wilds]
+      const water = new Set(
+        plates.flatMap((n) =>
+          n.layout.tiles
+            .filter((t) => wet(t.kind))
+            .map((t) => `${Math.round(n.x + t.x)},${Math.round(n.z + t.z)}`),
+        ),
+      )
+      for (const n of plates) {
+        for (const p of [
+          ...n.layout.trees,
+          ...n.layout.structures,
+          ...n.layout.lots,
+        ]) {
+          expect(
+            water.has(`${Math.round(n.x + p.x)},${Math.round(n.z + p.z)}`),
+          ).toBe(false)
+        }
+      }
+    }
+    setWorldSeed('')
   })
 })
