@@ -24,6 +24,10 @@ const BORDER_HEIGHT = 0.3
 const BORDER_INSET = 0.35
 const BORDER_INNER_INSET = 1.1
 
+// In the exploded view, each tile moves away from the middle of the map by this share of its
+// distance to it, so that the gap between two tiles follows their size.
+export const EXPLODE_SPREAD = 0.15
+
 const NO_RAYCAST = () => null
 
 interface Props {
@@ -38,6 +42,8 @@ interface Props {
   borders?: boolean
   // The colour of its border, its own among the neighbourhoods.
   borderColor?: string
+  // Whether the exploded view is on: the tiles are set a little apart.
+  exploded?: boolean
   // A joining tile, which only follows the others: it is never picked.
   inert?: boolean
   // Tells where its group is, for what drives across the plates (the traffic), or that it is gone.
@@ -62,6 +68,7 @@ export default function Plate({
   pickable: canPick,
   borders = true,
   borderColor = '#ffffff',
+  exploded = false,
   inert = false,
   register,
   popDelay,
@@ -73,6 +80,8 @@ export default function Plate({
 }: Props) {
   const group = useRef<Group>(null)
   const lifted = useRef(0)
+  // How far apart it stands, from 0 to 1, easing towards the exploded view.
+  const apart = useRef(0)
   // The time of the first frame, when the intro begins for this tile.
   const born = useRef<number | null>(null)
   // The last pose stays too, to come back after the focus is gone.
@@ -98,15 +107,18 @@ export default function Plate({
         ? 1
         : popScale(clock.elapsedTime - born.current, popDelay)
     const t = (lifted.current = approach(lifted.current, pose ? 1 : 0, delta))
+    apart.current = approach(apart.current, exploded ? 1 : 0, delta, 5)
+    // The focus view takes over, and the tiles come back together under it.
+    const spread = 1 + EXPLODE_SPREAD * apart.current * (1 - t)
     const { center, scale } = posed.current
     // Grows or shrinks around the middle of the screen.
     const k = 1 + (scale - 1) * t
     const [lx, ly, lz] = lift.current
     const own = focus ? t : 0
     group.current?.position.set(
-      center[0] + k * (plate.x - center[0]) + lx * own,
+      center[0] + k * (plate.x * spread - center[0]) + lx * own,
       center[1] + k * (0 - center[1]) + ly * own,
-      center[2] + k * (plate.z - center[2]) + lz * own,
+      center[2] + k * (plate.z * spread - center[2]) + lz * own,
     )
     group.current?.scale.setScalar(k * Math.max(pop, UNPOPPED))
   })

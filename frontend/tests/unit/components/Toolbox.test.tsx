@@ -58,3 +58,34 @@ it('marks the regenerate button with a refresh icon, in a colour of its own', as
   expect(screen.getByTestId('regenerate-icon').textContent).toBe('↻')
   expect(button.classList.contains('city-toolbox-action')).toBe(true)
 })
+
+it('has no exploded view button without a switch for it', () => {
+  render(<Toolbox onRegenerate={vi.fn()} />)
+
+  expect(screen.queryByRole('button', { name: 'Exploded view' })).toBeNull()
+})
+
+it('switches the exploded view with a button next to the toolbox one', async () => {
+  const onToggleExploded = vi.fn()
+  const { rerender } = render(
+    <Toolbox onRegenerate={vi.fn()} onToggleExploded={onToggleExploded} />,
+  )
+  const button = screen.getByRole('button', { name: 'Exploded view' })
+  expect(button.getAttribute('aria-pressed')).toBe('false')
+
+  await userEvent.click(button)
+  expect(onToggleExploded).toHaveBeenCalledTimes(1)
+
+  rerender(
+    <Toolbox
+      onRegenerate={vi.fn()}
+      exploded
+      onToggleExploded={onToggleExploded}
+    />,
+  )
+  expect(
+    screen
+      .getByRole('button', { name: 'Exploded view' })
+      .getAttribute('aria-pressed'),
+  ).toBe('true')
+})

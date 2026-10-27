@@ -310,6 +310,11 @@ button.city-title-badge[aria-pressed='true']:focus-visible {
   gap: 0.5rem;
 }
 
+.city-toolbox-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .city-toolbox-toggle {
   box-sizing: border-box;
   width: 2.25rem;
@@ -324,7 +329,8 @@ button.city-title-badge[aria-pressed='true']:focus-visible {
   cursor: pointer;
 }
 
-.city-toolbox-toggle[aria-expanded='true'] {
+.city-toolbox-toggle[aria-expanded='true'],
+.city-toolbox-toggle[aria-pressed='true'] {
   border-color: var(--text);
 }
 

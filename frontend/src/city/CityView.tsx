@@ -319,6 +319,8 @@ export default function CityView({
     })
   // The neighbourhood in focus, lifted in front of the others.
   const [focusedId, setFocusedId] = useState<string | null>(null)
+  // The exploded view: the tiles are set a little apart.
+  const [exploded, setExploded] = useState(false)
   // The legend only applies to the whole map: in focus, every label shows.
   const labels = focusedId ? ALL_LABELS : chosen
   // The building in focus within it, if any.
@@ -523,6 +525,7 @@ export default function CityView({
             plate={n}
             focus={null}
             inert
+            exploded={exploded}
             register={register}
             popDelay={pops.get(n.id)}
             pose={
@@ -607,6 +610,7 @@ export default function CityView({
               key={n.id}
               plate={n}
               focus={focusedId === n.id ? focus : null}
+              exploded={exploded}
               register={register}
               popDelay={pops.get(n.id)}
               pose={
@@ -737,7 +741,13 @@ export default function CityView({
           {refreshMenu}
         </div>
       )}
-      {!focusedId && onRegenerate && <Toolbox onRegenerate={onRegenerate} />}
+      {!focusedId && onRegenerate && (
+        <Toolbox
+          onRegenerate={onRegenerate}
+          exploded={exploded}
+          onToggleExploded={() => setExploded((e) => !e)}
+        />
+      )}
       {!focusedId && (
         <div ref={statusUi} className="status-ui">
           <StatusBadges
