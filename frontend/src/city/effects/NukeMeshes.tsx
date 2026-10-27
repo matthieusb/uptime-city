@@ -2,11 +2,10 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   CircleGeometry,
-  IcosahedronGeometry,
+  Color,
   InstancedMesh,
-  LatheGeometry,
   Object3D,
-  Vector2,
+  SRGBColorSpace,
   type BufferGeometry,
   type DataTexture,
   type Mesh,
@@ -23,25 +22,18 @@ import {
   flameCube,
   waveThickness,
 } from './blastShape'
+import { groundGlowLevel, rampColor } from './nukeShape'
 import {
-  CAP_HEAT_SPAN,
-  capHeat,
-  capLift,
-  capMajor,
-  capMinor,
-  capMinorY,
-  capRoll,
-  capScale,
-  fireballHeat,
-  fireballRadius,
-  fireballY,
-  groundGlowLevel,
-  stemHeat,
-  stemHeight,
-  stemProfile,
-  stemWidth,
-  STEM_HEIGHT,
-} from './nukeShape'
+  ballCube,
+  BALL_CUBES,
+  capCube,
+  CAP_CUBES,
+  CLOUD_CUBES,
+  newCube,
+  snap,
+  stemCube,
+  VOXEL,
+} from './voxelCloud'
 import {
   createBodyMaterial,
   createGlowMaterial,
@@ -59,8 +51,6 @@ import { sinceImpact } from './strikeShape'
 // The materials are not shared, since each nuke fades and grows by itself.
 interface Assets {
   ramp: DataTexture
-  fireball: BufferGeometry
-  stem: BufferGeometry
   ring: BufferGeometry
   disc: BufferGeometry
 }
@@ -73,11 +63,6 @@ function sharedAssets(): Assets {
   disc.rotateX(-Math.PI / 2)
   assets = {
     ramp: createRampTexture(),
-    fireball: new IcosahedronGeometry(1, 5),
-    stem: new LatheGeometry(
-      stemProfile(40).map((p) => new Vector2(p.r, p.y)),
-      28,
-    ),
     ring: createRingGeometry(),
     disc,
   }
@@ -89,12 +74,23 @@ const GROUND_GLOW_RADIUS = 8
 // Just over the ground, so that the glow is not lost in it.
 const GLOW_Y = 0.15
 
-// The mushroom cloud, in four meshes with a shader each: a fireball that swells and turns into
-// the cap, the cap, a torus whose surface rolls, the stem, lit from inside, and a glow on the
-// ground. No light: they are all emissive. `growth` is read every frame (0 to 1) and `glow` is
-// how much of the glow on the ground is left (1 whole, 0 once the restoration has swept it).
-// `size` is how much the whole cloud is scaled for its tile (see `cloudScale`), by the group, so
-// that the noise, the displacement and the glow grow with it and the look stays the same.
+// How fast the cubes move next to real time: slow, so that the cloud churns heavily.
+const CLOUD_PACE = 0.5
+
+// The colours a cube goes through, from white-hot to charcoal smoke, as ready-made colours.
+const HEAT_STEPS = 24
+const HEAT_COLORS = Array.from({ length: HEAT_STEPS }, (_, i) => {
+  const [r, g, b] = rampColor(i / (HEAT_STEPS - 1))
+  return new Color().setRGB(r / 255, g / 255, b / 255, SRGBColorSpace)
+})
+
+// The mushroom cloud: the fireball that swells and turns into the cap, the cap, a torus whose
+// surface rolls, and the stem, all made of cubes in one instanced mesh (see `voxelCloud.ts`), each
+// on a grid of its own size so that they step as they move, without a light. Plus a glow on the
+// ground. `growth` is read every frame (0 to 1) and `glow` is how much of the glow on the ground
+// is left (1 whole, 0 once the restoration has swept it). `size` is how much the whole cloud is
+// scaled for its tile (see `cloudScale`), by the group, so that the look stays the same: the cubes
+// are made taller or flatter to stay cubes once scaled.
 export function Mushroom({
   growth,
   glow,
@@ -105,93 +101,130 @@ export function Mushroom({
   size: { width: number; height: number }
 }) {
   const shared = useMemo(() => createNukeUniforms(sharedAssets().ramp), [])
-  const materials = useMemo(
-    () => ({
-      fireball: createBodyMaterial('fireball', shared),
-      stem: createBodyMaterial('stem', shared),
-      cap: createBodyMaterial('cap', shared),
-      ground: createGlowMaterial(
+  const groundMaterial = useMemo(
+    () =>
+      createGlowMaterial(
         { color: '#ff5a14', peak: 0, width: 0.6, fill: 0.6 },
         false,
       ),
-    }),
-    [shared],
+    [],
   )
-  useEffect(
-    () => () => {
-      Object.values(materials).forEach((m) => m.dispose())
-    },
-    [materials],
-  )
-  const fireball = useRef<Mesh>(null)
-  const stem = useRef<Mesh>(null)
-  const cap = useRef<Mesh>(null)
+  useEffect(() => () => groundMaterial.dispose(), [groundMaterial])
+  const cubes = useRef<InstancedMesh>(null)
   const ground = useRef<Mesh>(null)
+  const cube = useMemo(() => newCube(), [])
+  // What each cube was last written as, to rewrite only the ones that moved or changed colour:
+  // snapped to the grid, most keep their place and colour from one update to the next.
+  const written = useMemo(
+    () => ({
+      place: new Float32Array(4 * CLOUD_CUBES).fill(NaN),
+      heat: new Int8Array(CLOUD_CUBES).fill(-1),
+    }),
+    [],
+  )
+  const frame = useRef(0)
+  // The cloud is hidden while no cube is there.
+  const blank = useRef(true)
+  useLayoutEffect(() => {
+    const instances = cubes.current
+    if (!instances) return
+    // Every cube starts as nothing: a matrix with a scale of 0.
+    instances.instanceMatrix.array.fill(0)
+    for (let i = 0; i < CLOUD_CUBES; i++) {
+      instances.setColorAt(i, HEAT_COLORS[0])
+      instances.instanceMatrix.array[16 * i + 15] = 1
+    }
+    instances.instanceMatrix.needsUpdate = true
+    if (instances.instanceColor) instances.instanceColor.needsUpdate = true
+    written.place.fill(NaN)
+    written.heat.fill(-1)
+    blank.current = true
+  }, [written])
+  // Once scaled by the group, a cube is as wide as it is high; the grid is squared the same way.
+  const stretch = size.width / size.height
   useFrame(({ clock }) => {
     const g = growth()
-    const t = clock.elapsedTime
-    setTime(shared, t)
+    setTime(shared, clock.elapsedTime)
 
-    const radius = fireballRadius(g)
-    if (fireball.current) {
-      fireball.current.visible = radius > 0.02
-      fireball.current.scale.setScalar(radius)
-      fireball.current.position.y = fireballY(g)
-      setUniform(materials.fireball, 'uHeat', fireballHeat(g))
-    }
-
-    if (cap.current) {
-      cap.current.visible = capScale(g) > 0.01
-      cap.current.position.y = capLift(g)
-      setRing(materials.cap, capMajor(g), capMinor(g), capMinorY(g), capRoll(t))
-      setUniform(materials.cap, 'uHeat', capHeat(g))
-      setUniform(materials.cap, 'uHeatSpan', CAP_HEAT_SPAN)
-    }
-
-    if (stem.current) {
-      const width = stemWidth(g)
-      stem.current.visible = g > 0.005
-      stem.current.scale.set(width, stemHeight(g) / STEM_HEIGHT, width)
-      setUniform(materials.stem, 'uHeat', stemHeat(0, g))
-      setUniform(materials.stem, 'uHeatSpan', stemHeat(1, g) - stemHeat(0, g))
+    // The cubes move at their own, slower pace, and are rewritten every other frame.
+    const t = clock.elapsedTime * CLOUD_PACE
+    const instances = cubes.current
+    if (instances && frame.current++ % 2 === 0 && !(g <= 0 && blank.current)) {
+      const matrices = instances.instanceMatrix.array
+      let moved = false
+      let recoloured = false
+      let any = false
+      for (let i = 0; i < CLOUD_CUBES; i++) {
+        if (i < BALL_CUBES) ballCube(i, g, t, cube)
+        else if (i < BALL_CUBES + CAP_CUBES) capCube(i - BALL_CUBES, g, t, cube)
+        else stemCube(i - BALL_CUBES - CAP_CUBES, g, t, cube)
+        const x = snap(cube.x, VOXEL)
+        const y = snap(cube.y, VOXEL * stretch)
+        const z = snap(cube.z, VOXEL)
+        const s = cube.scale
+        any ||= s > 0
+        const at = 4 * i
+        const place = written.place
+        if (
+          place[at] !== x ||
+          place[at + 1] !== y ||
+          place[at + 2] !== z ||
+          place[at + 3] !== s
+        ) {
+          place[at] = x
+          place[at + 1] = y
+          place[at + 2] = z
+          place[at + 3] = s
+          // Position and scale only: the cubes never turn.
+          const m = 16 * i
+          matrices[m] = s
+          matrices[m + 5] = s * stretch
+          matrices[m + 10] = s
+          matrices[m + 12] = x
+          matrices[m + 13] = y
+          matrices[m + 14] = z
+          moved = true
+        }
+        const heat = Math.round(cube.heat * (HEAT_STEPS - 1))
+        if (written.heat[i] !== heat) {
+          written.heat[i] = heat
+          instances.setColorAt(i, HEAT_COLORS[heat])
+          recoloured = true
+        }
+      }
+      if (moved) instances.instanceMatrix.needsUpdate = true
+      if (recoloured && instances.instanceColor) {
+        instances.instanceColor.needsUpdate = true
+      }
+      blank.current = !any
     }
 
     if (ground.current) {
       // The embers breathe a little.
       const level =
-        groundGlowLevel(g) * glow() * (0.85 + 0.15 * Math.sin(t * 2.3)) * 0.6
+        groundGlowLevel(g) *
+        glow() *
+        (0.85 + 0.15 * Math.sin(clock.elapsedTime * 2.3)) *
+        0.6
       ground.current.visible = level > 0.01
-      setUniform(materials.ground, 'uIntensity', level)
+      setUniform(groundMaterial, 'uIntensity', level)
     }
   })
-  const { fireball: ball, stem: column, ring, disc } = sharedAssets()
+  const { disc } = sharedAssets()
   return (
     <group scale={[size.width, size.height, size.width]}>
-      <mesh
-        ref={fireball}
-        geometry={ball}
-        material={materials.fireball}
+      <instancedMesh
+        ref={cubes}
+        args={[undefined, undefined, CLOUD_CUBES]}
         frustumCulled={false}
-        visible={false}
-      />
-      <mesh
-        ref={stem}
-        geometry={column}
-        material={materials.stem}
-        frustumCulled={false}
-        visible={false}
-      />
-      <mesh
-        ref={cap}
-        geometry={ring}
-        material={materials.cap}
-        frustumCulled={false}
-        visible={false}
-      />
+      >
+        <boxGeometry />
+        <meshBasicMaterial toneMapped={false} />
+      </instancedMesh>
       <mesh
         ref={ground}
         geometry={disc}
-        material={materials.ground}
+        material={groundMaterial}
         // Just over the ground whatever the height of the cloud.
         position={[0, GLOW_Y / size.height, 0]}
         scale={GROUND_GLOW_RADIUS}

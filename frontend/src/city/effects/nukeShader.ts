@@ -24,10 +24,10 @@ import {
   type IUniform,
   type Texture,
 } from 'three'
-import { rampColor, STEM_HEIGHT } from './nukeShape'
+import { rampColor } from './nukeShape'
 
 export const RAMP_SIZE = 64
-// The radius of the tube of the unit torus that the cap and the wave are made of, next to its
+// The radius of the tube of the unit torus that the wave is made of, next to its
 // major radius of 1.
 export const RING_TUBE = 0.5
 
@@ -54,7 +54,7 @@ export function createRampTexture(): DataTexture {
 }
 
 // The unit torus, lying in the ground plane: major radius 1, tube RING_TUBE. The vertex shader
-// reshapes it with a uniform, so one geometry serves the cap and the wave.
+// reshapes it with a uniform, so that one geometry serves the wave.
 export function createRingGeometry(): TorusGeometry {
   const geometry = new TorusGeometry(1, RING_TUBE, 14, 72)
   geometry.rotateX(Math.PI / 2)
@@ -96,9 +96,8 @@ float fbm3(vec3 p) {
 }
 `
 
-// Bodies. The defines pick the shape: STEM (a lathe, y is its height in world units), FIREBALL (a
-// unit icosphere), RING (the unit torus, reshaped by uRing) and, with it, GROUND (only the upper
-// half, for the wave). `vNoise` is where the fragment shader samples the noise.
+// Bodies. The defines pick the shape: RING (the unit torus, reshaped by uRing) and, with it, GROUND
+// (only the upper half, for the wave). `vNoise` is where the fragment shader samples the noise.
 export const BODY_VERTEX = /* glsl */ `
 uniform float uTime;
 uniform float uDisp;
@@ -120,10 +119,6 @@ void main() {
   vec3 nrm = normal;
   vec3 np = position;
   float height = 0.0;
-
-#ifdef STEM
-  height = clamp(position.y / STEM_H, 0.0, 1.0);
-#endif
 
 #ifdef RING
   // The unit torus has a major radius of 1: (cos, sin) is the place on the tube.
@@ -280,9 +275,9 @@ export const createNukeUniforms = (ramp: Texture): NukeUniforms => ({
   uRamp: { value: ramp },
 })
 
-export type BodyKind = 'fireball' | 'stem' | 'cap' | 'wave'
+export type BodyKind = 'wave'
 
-// The look of each body, which `Mushroom` then drives with the pure functions of nukeShape.
+// The look of each body, which `Shockwave` then drives with the pure functions of blastShape.
 const BODY_LOOK: Record<
   BodyKind,
   {
@@ -297,39 +292,6 @@ const BODY_LOOK: Record<
     additive: boolean
   }
 > = {
-  fireball: {
-    defines: { FIREBALL: '' },
-    disp: 1.1,
-    freq: 1.3,
-    flow: [0, -0.9, 0],
-    heatNoise: 0.35,
-    rim: 0.45,
-    ragged: 0.35,
-    gain: 1.15,
-    additive: false,
-  },
-  stem: {
-    defines: { STEM: '', STEM_H: STEM_HEIGHT.toFixed(3) },
-    disp: 0.9,
-    freq: 0.55,
-    flow: [0, -1.1, 0],
-    heatNoise: 0.4,
-    rim: 0.25,
-    ragged: 0.3,
-    gain: 1.1,
-    additive: false,
-  },
-  cap: {
-    defines: { RING: '', RING_TUBE: RING_TUBE.toFixed(3) },
-    disp: 1.0,
-    freq: 0.5,
-    flow: [0, -0.25, 0],
-    heatNoise: 0.4,
-    rim: 0.2,
-    ragged: 0.3,
-    gain: 1.1,
-    additive: false,
-  },
   wave: {
     defines: { RING: '', GROUND: '', RING_TUBE: RING_TUBE.toFixed(3) },
     disp: 0.8,
@@ -354,8 +316,8 @@ export function createBodyMaterial(
     defines: { ...look.defines, ...(look.additive ? { ADDITIVE: '' } : {}) },
     uniforms: {
       uTime: shared.uTime,
-      // The wave fades with its own clock, the cloud with the one they share.
-      uFade: kind === 'wave' ? { value: 1 } : shared.uFade,
+      // The wave fades with its own clock.
+      uFade: { value: 1 },
       uRamp: shared.uRamp,
       uHeat: { value: 0 },
       uHeatSpan: { value: 0 },
@@ -426,7 +388,7 @@ export function setTime(shared: NukeUniforms, t: number): void {
   shared.uTime.value = t
 }
 
-// The reshaping of the ring of the cap or of the wave (see `uRing` in the vertex shader).
+// The reshaping of the ring of the wave (see `uRing` in the vertex shader).
 export function setRing(
   material: ShaderMaterial,
   major: number,

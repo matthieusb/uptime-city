@@ -1,7 +1,7 @@
 // The shape of a mushroom cloud, as pure functions of its growth, independent of three.js. The
-// cloud is four noise-shaded meshes (see `NukeMeshes.tsx`): a fireball that swells and turns into
-// the cap, a cap shaped like a torus whose surface rolls, a stem lit from inside, and the ground
-// glow. Growth `g` is 0 to 1 (see `growthAt`), 1 for a cloud full grown. The "heat" of a surface
+// cloud is made of cubes (see `voxelCloud.ts` and `NukeMeshes.tsx`) on three shapes: a fireball
+// that swells and turns into the cap, a cap shaped like a torus whose surface rolls, and a stem
+// lit from inside; and the ground glow. Growth `g` is 0 to 1 (see `growthAt`), 1 for a cloud full grown. The "heat" of a surface
 // is its place on the ramp of colours: 0 white-hot, then yellow, orange, red, and 1 charcoal smoke.
 
 // How high the cloud rises above the ground, for the smallest tile. The cloud is drawn at this
@@ -120,15 +120,6 @@ export function stemRadius(h: number): number {
   const x = clamp01((h - DOME_START) / (1 - DOME_START))
   const dome = Math.sqrt(Math.max(0, 1 - x * x))
   return (1 + foot + flare) * dome
-}
-
-// The profile of the stem, from the ground to its top, in world units: points (radius, height)
-// to turn into a lathe.
-export function stemProfile(steps: number): { r: number; y: number }[] {
-  return Array.from({ length: steps + 1 }, (_, i) => ({
-    r: stemRadius(i / steps),
-    y: (i / steps) * STEM_HEIGHT,
-  }))
 }
 
 // The heat of the stem at a fraction h of its height: white-hot at the foot of a young cloud,

@@ -3,9 +3,9 @@ import { cloudScale } from './nukeShape'
 import { sweptAt } from './restoreShape'
 import { growthAt } from './strikeShape'
 
-// A mushroom cloud of noise-shaded fire and smoke, smooth and not made of voxels like the rest of
-// the town, that churns slowly over the middle of a nuked ground (see `NukeMeshes.tsx`), taller and
-// wider the bigger the tile (`cloudScale`), over voxel fires that burn on the ground. When the
+// A mushroom cloud of voxel fire and smoke, like the rest of the town, that churns slowly over the
+// middle of a nuked ground (see `NukeMeshes.tsx` and `voxelCloud.ts`), taller and wider the bigger
+// the tile (`cloudScale`), over voxel fires that burn on the ground. When the
 // strike started at `startedAt` (milliseconds), it grows out of the impact; without one, it is
 // full grown. Its glow goes out as the wave of the restoration (`restoredAt`) sweeps it away.
 export default function Nuke({

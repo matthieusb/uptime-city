@@ -25,7 +25,6 @@ import {
   RAMP_STOPS,
   stemHeat,
   stemHeight,
-  stemProfile,
   stemRadius,
   stemWidth,
   STEM_HEIGHT,
@@ -134,15 +133,6 @@ describe('the stem', () => {
       expect(stemRadius(h)).toBeGreaterThanOrEqual(0)
       expect(Number.isFinite(stemRadius(h))).toBe(true)
     }
-  })
-
-  it('has a profile from the ground to the top, in the units of the world', () => {
-    const profile = stemProfile(30)
-    expect(profile).toHaveLength(31)
-    expect(profile[0]).toEqual({ r: stemRadius(0), y: 0 })
-    expect(profile.at(-1)!.y).toBeCloseTo(STEM_HEIGHT, 6)
-    expect(profile.at(-1)!.r).toBeCloseTo(0, 6)
-    expect(nondecreasing(profile.map((p) => p.y))).toBe(true)
   })
 
   it('goes from white-hot to charcoal smoke with height, and cools with age', () => {
