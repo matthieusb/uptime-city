@@ -16,7 +16,7 @@ frontend/       # Vite + React + TypeScript -> frontend/CLAUDE.md (three.js / R3
 ```
 
 - The backend probes the services, stores the results and exposes them.
-- The frontend only displays results. It never sends commands to the backend, with one explicit exception: in simulation mode, the simulation is stopped at first, a click on its counter starts or stops its redrawing (`POST /api/v1/simulation/start` and `/stop`) a button redraws the simulated statuses at once (`POST /api/v1/simulation/refresh`) and, while it is stopped, buttons make by hand the events that would happen by themselves (`POST /api/v1/simulation/actions/{action}`), all of them answering 404 otherwise. The other exception is the toolbox of the 3D view: its regenerate button asks the backend for a new city seed (`POST /api/v1/city/regenerate`), which the backend keeps.
+- The frontend only displays results. It never sends commands to the backend, with one explicit exception: in simulation mode, the simulation is stopped at first, a click on its counter starts or stops its redrawing (`POST /api/v1/simulation/start` and `/stop`) a button redraws the simulated statuses at once (`POST /api/v1/simulation/refresh`) and, while it is stopped, buttons make by hand the events that would happen by themselves (`POST /api/v1/simulation/actions/{action}`), all of them answering 404 otherwise. The other exception is the toolbox of the 3D view: its regenerate button asks the backend for a new city seed (`POST /api/v1/city/regenerate`), or, on the planet view, for a new planet seed (`POST /api/v1/planet/regenerate`), which the backend keeps.
 - docker-compose comes later.
 
 ## Frontend ↔ backend communication
