@@ -21,6 +21,7 @@
 import { seeded } from './seed'
 import { biomeAt, treeFor, weightOf, type Biome, type Biomes } from './biomes'
 import type { TrackPiece } from './tracks'
+import type { MonumentKind } from './monuments'
 
 const SQRT3 = Math.sqrt(3)
 
@@ -200,6 +201,8 @@ export type StructureKind =
   | 'kiosk'
   // The airport, placed on the biggest plate by `placeAirport` (airport.ts).
   | 'airport'
+  // A monument, placed by `placeMonuments` (monuments.ts); which one is `monument`.
+  | 'monument'
 
 export interface Structure {
   kind: StructureKind
@@ -211,6 +214,8 @@ export interface Structure {
   height: number
   // Quarter turns of the airport, 0 to 3 (its runway runs along X for 0 and 2).
   turn?: number
+  // Which monument a 'monument' is.
+  monument?: MonumentKind
 }
 
 const STRUCTURES: Record<
@@ -225,6 +230,8 @@ const STRUCTURES: Record<
   stadium: { width: 9, depth: 7, height: 2.1, ground: 'plaza' },
   // Its size is chosen by `placeAirport`.
   airport: { width: 0, depth: 0, height: 3.5 },
+  // Its size and height are those of its monument.
+  monument: { width: 0, depth: 0, height: 0 },
   kiosk: { width: 2, depth: 1, height: 1.15 },
 }
 // The share of the houses that come up away from the paths that get built.

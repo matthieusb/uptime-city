@@ -2,6 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { Color, Object3D, type Group, type InstancedMesh } from 'three'
 import { airportBoxes } from './airport'
+import { monumentBoxes } from './monuments'
 import { CAR_COLORS } from './traffic'
 import { trackBoxes } from './trackBoxes'
 import {
@@ -726,6 +727,9 @@ function structureBoxes(s: Structure, groups: Map<string, Box[]>) {
     }
     case 'airport':
       airportBoxes(s, (color, b) => addBox(groups, color, b))
+      break
+    case 'monument':
+      monumentBoxes(s, (color, b) => addBox(groups, color, b))
       break
     case 'kiosk': {
       const awning = pick(AWNINGS)

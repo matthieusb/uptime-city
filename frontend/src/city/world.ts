@@ -34,6 +34,7 @@ import {
   type TileKind,
 } from './layout'
 import { placeAirport } from './airport'
+import { placeMonuments } from './monuments'
 import { layTracks, type Track } from './tracks'
 
 // A physical host: the buildings it is monitored through, its own first and
@@ -851,7 +852,9 @@ export function worldLayout(specs: NeighbourhoodSpec[]): World {
     extra[hider] += 2
     world = build(extra)
   }
-  return clearWilds(placeAirport(blendSeams(layTracks(layRoads(world)))))
+  return clearWilds(
+    placeMonuments(placeAirport(blendSeams(layTracks(layRoads(world))))),
+  )
 }
 
 // The ground of a neighbourhood after a nuke: the decoration, the trees, the
