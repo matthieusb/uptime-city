@@ -9,7 +9,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 
-from uptime_city.api.routes_endpoints import router
+from uptime_city.api import routers
 from uptime_city.config.loader import load_config
 from uptime_city.config.models import Config
 from uptime_city.monitor.scheduler import Monitor
@@ -38,11 +38,8 @@ def create_app(config: Config, probe: Probe = ping, simulate: bool = False) -> F
     app = FastAPI(title="uptime-city", lifespan=lifespan)
     app.state.monitor = monitor
     app.state.database = database
-    app.include_router(router)
-
-    @app.get("/api/v1/health")
-    async def health() -> dict[str, str]:  # pyright: ignore[reportUnusedFunction]
-        return {"status": "ok"}
+    for router in routers:
+        app.include_router(router)
 
     return app
 
