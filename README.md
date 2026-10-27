@@ -73,6 +73,8 @@ services:
     volumes:
       - ./config.yaml:/config/config.yaml:ro
       - uptime-data:/app/data # SQLite history, when storage.type is sqlite
+    networks:
+      - uptime_city_net
     # Lets the non-root user send ICMP pings (icmp:// checks).
     sysctls:
       net.ipv4.ping_group_range: "0 2147483647"
@@ -88,6 +90,12 @@ services:
       BACKEND_URL: http://uptime-city-backend:8000
     ports:
       - "8080:8080"
+    networks:
+      - uptime_city_net
+
+networks:
+  uptime_city_net:
+    driver: bridge
 
 volumes:
   uptime-data:
