@@ -48,8 +48,8 @@ class Endpoint(BaseModel):
             try:
                 parts = urlsplit(value)
                 port = parts.port
-            except ValueError as exc:
-                raise ValueError(f"invalid tcp url {value!r}: {exc}") from exc
+            except ValueError as exception:
+                raise ValueError(f"invalid tcp url {value!r}: {exception}") from exception
             if not parts.hostname or port is None:
                 raise ValueError("tcp endpoints need tcp://<host>:<port>")
             return value
@@ -61,7 +61,9 @@ class Endpoint(BaseModel):
 
     @model_validator(mode="after")
     def _http_expects_a_status(self) -> "Endpoint":
-        if self.is_http and not any(c.lstrip().startswith("[STATUS]") for c in self.conditions):
+        if self.is_http and not any(
+            condition.lstrip().startswith("[STATUS]") for condition in self.conditions
+        ):
             raise ValueError(
                 f"http endpoint {self.name!r} must state its expected status, "
                 'e.g. conditions: ["[STATUS] == 200"]'

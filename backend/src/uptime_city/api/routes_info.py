@@ -22,9 +22,10 @@ class Info(BaseModel):
 @router.get("/info")
 async def info(request: Request) -> Info:
     monitor = get_monitor(request)
+    control = monitor.simulation_control
     return Info(
         lab_name=monitor.lab_name,
-        simulation=monitor.simulation is not None,
-        simulation_running=monitor.simulation_running,
-        next_refresh_in_s=monitor.next_refresh_in_s(),
+        simulation=control is not None,
+        simulation_running=control is not None and control.running,
+        next_refresh_in_s=control.next_refresh_in_s() if control is not None else None,
     )

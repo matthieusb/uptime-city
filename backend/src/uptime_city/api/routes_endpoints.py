@@ -27,15 +27,15 @@ class EndpointInfo(BaseModel):
 async def list_endpoints(request: Request) -> list[EndpointInfo]:
     return [
         EndpointInfo(
-            id=e.id,
-            name=e.name,
-            hostname=e.hostname,
-            interval_s=e.interval.total_seconds(),
-            host_id=e.host_id,
-            kind=e.kind,
-            parent_id=e.parent_id,
+            id=endpoint.id,
+            name=endpoint.name,
+            hostname=endpoint.hostname,
+            interval_s=endpoint.interval.total_seconds(),
+            host_id=endpoint.host_id,
+            kind=endpoint.kind,
+            parent_id=endpoint.parent_id,
         )
-        for e in get_monitor(request).endpoints.values()
+        for endpoint in get_monitor(request).endpoints.values()
     ]
 
 

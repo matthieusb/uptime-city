@@ -1,4 +1,4 @@
-from tests.helpers import make_client
+from tests.api.helpers import make_client
 
 
 def test_info_tells_whether_the_backend_simulates() -> None:

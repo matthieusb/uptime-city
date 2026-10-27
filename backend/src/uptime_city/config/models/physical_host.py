@@ -17,6 +17,6 @@ class PhysicalHost(VmHost):
 
     @model_validator(mode="after")
     def _attach_vm_hosts(self) -> "PhysicalHost":
-        for vm in self.vm_hosts:
-            vm._parent_id = self.id  # pyright: ignore[reportPrivateUsage]
+        for vm_host in self.vm_hosts:
+            vm_host._parent_id = self.id  # pyright: ignore[reportPrivateUsage]
         return self

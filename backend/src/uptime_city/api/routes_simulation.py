@@ -2,38 +2,39 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from uptime_city.api.deps import get_monitor
 from uptime_city.api.routes_info import Info, info
-from uptime_city.monitor.scheduler import Monitor
 from uptime_city.monitor.simulation import Action
+from uptime_city.monitor.simulation_control import SimulationControl
 
 router = APIRouter(prefix="/api/v1")
 
 
-# The monitor, when the backend simulates its statuses: these routes do not exist otherwise.
-def _simulating(request: Request) -> Monitor:
-    monitor = get_monitor(request)
-    if monitor.simulation is None:
+# The control of the simulation, when the backend simulates its statuses: these routes answer 404
+# otherwise.
+def _simulating(request: Request) -> SimulationControl:
+    control = get_monitor(request).simulation_control
+    if control is None:
         raise HTTPException(status_code=404, detail="the backend is not simulating")
-    return monitor
+    return control
 
 
 @router.post("/simulation/refresh")
 async def refresh_simulation(request: Request) -> Info:
     """Redraws the simulated statuses now. Only in simulation."""
-    _simulating(request).refresh_simulation()
+    _simulating(request).refresh()
     return await info(request)
 
 
 @router.post("/simulation/start")
 async def start_simulation(request: Request) -> Info:
     """Redraws the simulated statuses every period from now on. Only in simulation."""
-    _simulating(request).start_simulation()
+    _simulating(request).start()
     return await info(request)
 
 
 @router.post("/simulation/stop")
 async def stop_simulation(request: Request) -> Info:
     """Stops redrawing the simulated statuses by themselves. Only in simulation."""
-    _simulating(request).stop_simulation()
+    _simulating(request).stop()
     return await info(request)
 
 
@@ -43,8 +44,8 @@ async def simulation_action(request: Request, action: Action, count: int = Query
     brings everything up, `nuke-host`, `demolish-vm`, `down-services` take a physical host, a
     vm-host or `count` services down, `revive-host`, `revive-vm`, `revive-services` bring one
     host, one vm-host or `count` services back up. Only in a stopped simulation."""
-    monitor = _simulating(request)
-    if monitor.simulation_running:
+    control = _simulating(request)
+    if control.running:
         raise HTTPException(status_code=409, detail="stop the simulation first")
-    monitor.act_on_simulation(action, count)
+    control.act(action, count)
     return await info(request)

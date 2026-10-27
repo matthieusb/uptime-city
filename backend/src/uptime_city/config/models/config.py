@@ -29,11 +29,15 @@ class Config(BaseModel):
     def endpoints(self) -> list[Endpoint]:
         """Every check, each host followed by its services, and by its vm-hosts."""
         return [
-            e
+            endpoint
             for host in self.hosts
-            for e in (
+            for endpoint in (
                 host,
                 *host.services,
-                *(e for vm in host.vm_hosts for e in (vm, *vm.services)),
+                *(
+                    endpoint
+                    for vm_host in host.vm_hosts
+                    for endpoint in (vm_host, *vm_host.services)
+                ),
             )
         ]

@@ -4,7 +4,8 @@ import httpx
 import pytest
 import respx
 
-from tests.helpers import URL, endpoint
+from tests.config.helpers import endpoint
+from tests.probes.helpers import URL
 from uptime_city.probes.http import probe_http
 
 

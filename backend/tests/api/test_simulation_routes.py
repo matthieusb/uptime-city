@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.helpers import make_client
+from tests.api.helpers import make_client
 
 
 def test_refresh_simulation_redraws_now_and_restarts_the_countdown() -> None:
