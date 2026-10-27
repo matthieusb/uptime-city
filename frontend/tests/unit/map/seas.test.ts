@@ -75,4 +75,27 @@ describe('seas on the side edges', () => {
     }
     setWorldSeed('')
   })
+  it('keeps a tile of dry ground between the sea and the houses, so that none looks built on water', () => {
+    for (const seed of seeds.slice(0, 15)) {
+      const { world } = edges(seed)
+      for (const neighbourhood of [...world.neighbourhoods, ...world.wilds]) {
+        const water = neighbourhood.layout.tiles.filter((tile) =>
+          wet(tile.kind),
+        )
+        for (const house of neighbourhood.layout.structures.filter(
+          (structure) => structure.kind === 'house',
+        )) {
+          for (const tile of water) {
+            // The tiles of the footprint and the ring around it are at less than half a tile
+            // plus one from its middle.
+            const near =
+              Math.abs(tile.x - house.x) < house.width / 2 + 1 &&
+              Math.abs(tile.z - house.z) < house.depth / 2 + 1
+            expect(near, `${seed} ${neighbourhood.id}`).toBe(false)
+          }
+        }
+      }
+    }
+    setWorldSeed('')
+  })
 })

@@ -32,6 +32,8 @@ const SEA_EXTRA = 4
 
 // Tiles kept dry around the paved square of a monitored building.
 const SEA_KEEPOUT = 2
+// Tiles kept dry between the sea and what stands near it (a house, a shop, a tennis club).
+const SEA_SHORE = 1
 
 // A sea may lie along the left or the right edge of the map, whatever the
 // biomes there: its shore is wavy, and it leaves roads, the railway, monitored
@@ -99,10 +101,15 @@ export function carveSeas(world: World): World {
       width: number
       depth: number
     }) =>
-      [...Array(s.width).keys()].some((di) =>
-        [...Array(s.depth).keys()].some((dj) =>
+      // The tiles of its footprint and the ring of tiles around it: nothing stands right at the
+      // water's edge, where it would look as if it stood on the sea.
+      [...Array(s.width + 2 * SEA_SHORE).keys()].some((di) =>
+        [...Array(s.depth + 2 * SEA_SHORE).keys()].some((dj) =>
           drowned.has(
-            at(s.x - (s.width - 1) / 2 + di, s.z - (s.depth - 1) / 2 + dj),
+            at(
+              s.x - (s.width - 1) / 2 + di - SEA_SHORE,
+              s.z - (s.depth - 1) / 2 + dj - SEA_SHORE,
+            ),
           ),
         ),
       )
