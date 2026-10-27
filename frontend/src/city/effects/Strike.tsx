@@ -1,15 +1,16 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
+  AdditiveBlending,
   Color,
   Object3D,
+  PlaneGeometry,
   Quaternion,
   Vector3,
   type Group,
   type InstancedMesh,
   type Mesh,
   type MeshBasicMaterial,
-  type PointLight,
 } from 'three'
 import {
   MISSILE_S,
@@ -17,11 +18,13 @@ import {
   type Course,
   STRIKE_S,
   flashLevel,
+  flashSize,
   missileAt,
   missileBoxes,
   trailPuff,
   trailSeeds,
 } from './strikeShape'
+import { createGlowMaterial, setUniform } from './nukeShader'
 
 const HOT = new Color('#fff1d6')
 const SMOKE = new Color('#ffffff')
@@ -111,32 +114,55 @@ function Missile({ since, course }: { since: () => number; course: Course }) {
   )
 }
 
-// The white ball and the light of the explosion, at the impact.
+// The white ball and the glow of the explosion, at the impact. No real light: the ball is
+// emissive, and a soft glow, added over the scene and facing the screen, spreads around it.
 function Flash({ since }: { since: () => number }) {
   const ball = useRef<Mesh>(null)
-  const light = useRef<PointLight>(null)
+  const glow = useRef<Mesh>(null)
+  const plane = useMemo(() => new PlaneGeometry(2, 2), [])
+  const material = useMemo(
+    () =>
+      createGlowMaterial(
+        { color: '#fff0c0', peak: 0, width: 0.45, fill: 0.6 },
+        true,
+        // The wash of light covers what stands in front of it too, for a moment.
+        false,
+      ),
+    [],
+  )
+  useEffect(() => () => plane.dispose(), [plane])
+  useEffect(() => () => material.dispose(), [material])
   useFrame(() => {
     const level = flashLevel(since() - MISSILE_S)
     if (ball.current) {
       ball.current.visible = level > 0
-      ball.current.scale.setScalar(2 + 14 * (1 - level))
+      ball.current.scale.setScalar(flashSize(level))
       ;(ball.current.material as MeshBasicMaterial).opacity = 0.9 * level
     }
-    if (light.current) light.current.intensity = 900 * level * level
+    if (glow.current) {
+      glow.current.visible = level > 0
+      glow.current.scale.setScalar(flashSize(level) * 2.4)
+      setUniform(material, 'uIntensity', 1.5 * level * level)
+    }
   })
   return (
     <>
       <mesh ref={ball} position={[0, 1.5, 0]}>
         <sphereGeometry args={[1, 24, 16]} />
-        <meshBasicMaterial color="#fff3d0" transparent depthWrite={false} />
+        <meshBasicMaterial
+          color="#fff3d0"
+          transparent
+          depthWrite={false}
+          blending={AdditiveBlending}
+        />
       </mesh>
-      <pointLight
-        ref={light}
-        position={[0, 4, 0]}
-        color="#fff0c0"
-        intensity={0}
-        distance={50}
-        decay={2}
+      <mesh
+        ref={glow}
+        geometry={plane}
+        material={material}
+        position={[0, 3, 0]}
+        frustumCulled={false}
+        visible={false}
       />
     </>
   )

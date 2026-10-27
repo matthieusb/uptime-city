@@ -9,7 +9,8 @@ import {
   growthAt,
   missileAt,
   missileBoxes,
-  puffGrowth,
+  flashSize,
+  sinceImpact,
   trailPuff,
   trailSeeds,
 } from '../../../src/city/effects/strikeShape'
@@ -184,10 +185,17 @@ describe('strike timeline', () => {
     expect(growthAt(null, 5)).toBe(1)
   })
 
-  it('shows the foot of the cloud before its top', () => {
-    expect(puffGrowth(0, 0.3)).toBeGreaterThan(puffGrowth(1, 0.3))
-    expect(puffGrowth(1, 0)).toBe(0)
-    expect(puffGrowth(1, 1)).toBe(1)
-    expect(puffGrowth(0, 1)).toBe(1)
+  it('swells the flash as it fades', () => {
+    expect(flashSize(1)).toBeGreaterThan(0)
+    expect(flashSize(0)).toBeGreaterThan(flashSize(1))
+    expect(flashSize(0.5)).toBeGreaterThan(flashSize(1))
+    expect(flashSize(0.5)).toBeLessThan(flashSize(0))
+  })
+
+  it('counts the seconds since the impact, and has long burnt for a tile nuked from the start', () => {
+    expect(sinceImpact(1000, 1000 + MISSILE_S * 1000)).toBeCloseTo(0, 9)
+    expect(sinceImpact(1000, 1000 + (MISSILE_S + 2) * 1000)).toBeCloseTo(2, 9)
+    expect(sinceImpact(1000, 1000)).toBeCloseTo(-MISSILE_S, 9)
+    expect(sinceImpact(null, 5000)).toBe(Infinity)
   })
 })

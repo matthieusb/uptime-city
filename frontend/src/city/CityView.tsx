@@ -62,7 +62,7 @@ import { cruiseHeight } from './flights'
 import Traffic from './Traffic'
 import Trains from './Trains'
 import { holdUntil } from './strike'
-import { NUKE_HEIGHT } from './effects/nukeShape'
+import { nukeHeight } from './effects/nukeShape'
 import BuildingPanel from './BuildingPanel'
 import HostTitle from './HostTitle'
 import DensityMenu from './DensityMenu'
@@ -292,7 +292,10 @@ export default function CityView({
   )
   const top = Math.max(
     MIN_TOP,
-    nuked.size > 0 ? NUKE_HEIGHT : 0,
+    // The cloud of a nuked tile is as tall as its tile makes it.
+    ...world.neighbourhoods
+      .filter((n) => nuked.has(n.id))
+      .map((n) => nukeHeight(n.layout.halfWidth, n.layout.halfDepth)),
     ...world.neighbourhoods.flatMap((n) => n.layout.lots.map((l) => l.height)),
   )
   const frame = useMemo(() => worldFrame(world, top), [world, top])
@@ -331,7 +334,9 @@ export default function CityView({
     // Framed up to its own tallest building, to center what it shows.
     const tallest = Math.max(
       MIN_TOP,
-      nuked.has(plate.id) ? NUKE_HEIGHT : 0,
+      nuked.has(plate.id)
+        ? nukeHeight(plate.layout.halfWidth, plate.layout.halfDepth)
+        : 0,
       ...plate.layout.lots.map((l) => l.height),
     )
     return plateFrame(plate, tallest)

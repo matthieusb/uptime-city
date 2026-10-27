@@ -248,9 +248,12 @@ export function growthAt(startedAt: number | null, now: number): number {
   return 1 - (1 - x) * (1 - x)
 }
 
-// The cloud grows from the foot to the top: a puff at the given fraction of
-// the cloud's height (0 to 1) swells in when the growth reaches it.
-export function puffGrowth(height: number, growth: number): number {
-  const x = clamp((growth - 0.7 * height) / 0.3)
-  return x * x * (3 - 2 * x)
+// Seconds since the impact, from the start of the strike and the time now, both in milliseconds:
+// negative while the missile still flies, Infinity for a tile nuked from the start, where all has
+// long burnt.
+export function sinceImpact(startedAt: number | null, now: number): number {
+  return startedAt === null ? Infinity : (now - startedAt) / 1000 - MISSILE_S
 }
+
+// The radius of the flash: it swells as its level falls from 1 to 0.
+export const flashSize = (level: number): number => 2 + 14 * (1 - level)

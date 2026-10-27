@@ -11,9 +11,8 @@ import {
   FLAME_GROW_S,
   fireFlames,
   flameCount,
-  waveColumns,
-  waveCube,
-  WAVE_CUBES,
+  blastHeat,
+  waveThickness,
   MAX_FLAMES,
   MIN_FLAMES,
 } from '../../../src/city/effects/blastShape'
@@ -134,10 +133,22 @@ describe('flameCube', () => {
     expect(low.stage).toBeLessThan(high.stage)
   })
 
-  it('stays around the foot of its flame', () => {
+  it('shrinks as it rises, and sways around the foot of its flame', () => {
+    const stages = Array.from({ length: 40 }, (_, i) =>
+      flameCube(flame, 1, i * 0.05),
+    )
+    const low = stages.reduce((a, b) => (a.y < b.y ? a : b))
+    const high = stages.reduce((a, b) => (a.y > b.y ? a : b))
+    expect(high.scale).toBeLessThan(low.scale)
     const cube = flameCube(flame, 2, 1.7)
     expect(Math.abs(cube.x - flame.x)).toBeLessThan(1)
     expect(Math.abs(cube.z - flame.z)).toBeLessThan(1)
+  })
+
+  it('flickers: it is not at the same place a moment later', () => {
+    const a = flameCube(flame, 0, 1)
+    const b = flameCube(flame, 0, 1.2)
+    expect(a.x === b.x && a.y === b.y && a.z === b.z).toBe(false)
   })
 })
 
@@ -161,57 +172,22 @@ describe('flameCount', () => {
   })
 })
 
-describe('the wall of flames of the wave', () => {
-  const columns = waveColumns(40)
-
-  it('has more columns around a bigger tile, within bounds', () => {
-    expect(waveColumns(60)).toBeGreaterThan(waveColumns(30))
-    expect(waveColumns(1)).toBeGreaterThanOrEqual(12)
-    expect(waveColumns(1000)).toBeLessThanOrEqual(200)
-  })
-
-  it('burns on the front of the wave, all around it', () => {
-    const radius = 25
-    for (let column = 0; column < columns; column += 7) {
-      for (let k = 0; k < WAVE_CUBES; k++) {
-        const cube = waveCube(column, k, columns, radius, BLAST_S / 2, 1.3)
-        expect(Math.abs(Math.hypot(cube.x, cube.z) - radius)).toBeLessThan(1)
-      }
+describe('the fiery band of the wave', () => {
+  it('gets thicker as the wave spreads, but never thicker than its radius', () => {
+    expect(waveThickness(0)).toBe(0)
+    expect(waveThickness(5)).toBeGreaterThan(0)
+    expect(waveThickness(40)).toBeGreaterThan(waveThickness(5))
+    for (const radius of [0.1, 1, 5, 20, 40, 80]) {
+      expect(waveThickness(radius)).toBeLessThanOrEqual(radius)
     }
-    const angles = Array.from({ length: columns }, (_, c) =>
-      Math.atan2(
-        waveCube(c, 0, columns, radius, 0.5, 0).z,
-        waveCube(c, 0, columns, radius, 0.5, 0).x,
-      ),
-    )
-    expect(Math.max(...angles) - Math.min(...angles)).toBeGreaterThan(5)
+    expect(waveThickness(1000)).toBeLessThan(5)
   })
 
-  it('rises from the ground to the height of the wall, burning out as it goes', () => {
-    const since = 0.3
-    const cubes = Array.from({ length: 30 }, (_, i) =>
-      waveCube(2, 0, columns, 10, since, i * 0.07),
-    )
-    for (const cube of cubes) {
-      expect(cube.y).toBeGreaterThanOrEqual(0)
-      expect(cube.y).toBeLessThanOrEqual(5)
-      expect(cube.scale).toBeGreaterThanOrEqual(0)
-    }
-    const low = cubes.reduce((a, b) => (a.y < b.y ? a : b))
-    const high = cubes.reduce((a, b) => (a.y > b.y ? a : b))
-    expect(low.stage).toBeLessThan(high.stage)
-  })
-
-  it('has bigger flames where the columns are further apart', () => {
-    const near = waveCube(0, 0, columns, 4, 0.3, 0.5).scale
-    const far = waveCube(0, 0, columns, 40, 0.3, 0.5).scale
-    expect(far).toBeGreaterThan(near)
-  })
-
-  it('dies down as the wave runs out', () => {
-    const early = waveCube(0, 0, columns, 20, 0.2, 0.4).scale
-    const late = waveCube(0, 0, columns, 20, BLAST_S * 0.95, 0.4).scale
-    expect(late).toBeLessThan(early)
-    expect(waveCube(0, 0, columns, 20, BLAST_S, 0.4).scale).toBe(0)
+  it('goes from white-hot to red as it spends itself', () => {
+    expect(blastHeat(0)).toBeLessThan(0.25)
+    expect(blastHeat(BLAST_S)).toBeGreaterThan(blastHeat(0))
+    expect(blastHeat(BLAST_S)).toBeLessThan(0.8)
+    expect(blastHeat(Infinity)).toBeLessThan(0.8)
+    expect(blastHeat(-1)).toBe(blastHeat(0))
   })
 })
