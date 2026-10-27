@@ -48,4 +48,6 @@ Whatever the technical layer (API routes, models, storage, schemas, components, 
 
 ## Frontend
 
-- The map is split by unit: `world.ts` assembles the map; its roads, seas, seams between biomes, wild tiles and the sizing of the plates each have their own module in `src/city/world/`.
+- The map is split by unit: `src/city/world.ts` assembles it (the world, its neighbourhoods, the frame), and its roads, seas, seams between biomes, wild tiles and the sizing of the plates each have their own module in `src/city/map/` (`roads.ts`, `seas.ts`, `seams.ts`, `wilds.ts`, `sizing.ts`). The other units of the city (`airport.ts`, `monuments.ts`, `tracks.ts`, `traffic.ts`, `trains.ts`, ...) are modules next to it.
+- Names are derived from the type for objects: a `Neighbourhood` is `neighbourhood`, a `Lot` is `lot`, a `Tile` is `tile`, never `n`, `l` or `t`.
+- Tests are named after the unit they test and live in the folder of its layer (`tests/unit/map/seas.test.ts` for `src/city/map/seas.ts`).
