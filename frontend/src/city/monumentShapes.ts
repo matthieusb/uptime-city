@@ -15,7 +15,7 @@ export interface Part {
   sz: number
 }
 
-type Builder = (b: Tools) => void
+type Builder = (tools: Tools) => void
 
 interface Tools {
   // A box from y0 up by h, centered on (x, z).

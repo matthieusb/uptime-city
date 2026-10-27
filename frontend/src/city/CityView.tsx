@@ -121,8 +121,8 @@ function cameraPosition(frame: Frame): [number, number, number] {
 // Zooms so that the whole map, up to its tallest building, fits in the
 // canvas. The map can then be dragged and zoomed.
 function FitCamera({ frame }: { frame: Frame }) {
-  const get = useThree((s) => s.get)
-  const { width, height } = useThree((s) => s.size)
+  const get = useThree((rootState) => rootState.get)
+  const { width, height } = useThree((rootState) => rootState.size)
   useLayoutEffect(() => {
     const { camera, controls } = get()
     const [x, y, z] = cameraPosition(frame)
@@ -184,22 +184,25 @@ export default function CityView({
     return worldLayout(
       groups.map((group) => ({
         id: group.host.id,
-        buildings: [group, ...group.vms].map((b) => ({
-          id: b.host.id,
-          services: b.services.length,
+        buildings: [group, ...group.vms].map((vmGroup) => ({
+          id: vmGroup.host.id,
+          services: vmGroup.services.length,
         })),
       })),
     )
   }, [groups, seed])
   const groupOf = useMemo(
-    () => new Map(groups.map((g) => [g.host.id, g])),
+    () => new Map(groups.map((hostGroup) => [hostGroup.host.id, hostGroup])),
     [groups],
   )
   const hosts = useMemo(
-    () => new Map(allHosts(groups).map((g) => [g.host.id, g])),
+    () =>
+      new Map(allHosts(groups).map((vmGroup) => [vmGroup.host.id, vmGroup])),
     [groups],
   )
-  const names = new Map(groups.map((g) => [g.host.id, g.host.name]))
+  const names = new Map(
+    groups.map((hostGroup) => [hostGroup.host.id, hostGroup.host.name]),
+  )
 
   // The effects to show.
   const [effects, setEffects] = usePersistentState<ReadonlySet<EffectKind>>(
@@ -240,25 +243,28 @@ export default function CityView({
   // missile that falls on it hit the ground.
   const strikes = useStrikes(
     new Map(
-      world.neighbourhoods.map((n) => [n.id, latestStatus(history.get(n.id))]),
+      world.neighbourhoods.map((neighbourhood) => [
+        neighbourhood.id,
+        latestStatus(history.get(neighbourhood.id)),
+      ]),
     ),
     effects.has('animations'),
   )
   const nuked = new Set(
     world.neighbourhoods
-      .filter((n) => {
-        const phase = strikes.phases.get(n.id)
+      .filter((neighbourhood) => {
+        const phase = strikes.phases.get(neighbourhood.id)
         return phase === 'struck' || phase === 'ruins'
       })
-      .map((n) => n.id),
+      .map((neighbourhood) => neighbourhood.id),
   )
   const nukedKey = [...nuked].join('|')
   // Missiles come first: the other buildings are demolished one second after
   // the last impact.
   const holdTime = holdUntil(
-    world.neighbourhoods.flatMap((n) => {
-      const phase = strikes.phases.get(n.id)
-      const startedAt = strikes.startedAt.get(n.id)
+    world.neighbourhoods.flatMap((neighbourhood) => {
+      const phase = strikes.phases.get(neighbourhood.id)
+      const startedAt = strikes.startedAt.get(neighbourhood.id)
       return (phase === 'incoming' || phase === 'struck') &&
         startedAt !== undefined
         ? [startedAt]
@@ -268,9 +274,11 @@ export default function CityView({
   const layouts = useMemo(
     () =>
       new Map(
-        world.neighbourhoods.map((n) => [
-          n.id,
-          nukedKey.split('|').includes(n.id) ? nukedLayout(n.layout) : n.layout,
+        world.neighbourhoods.map((neighbourhood) => [
+          neighbourhood.id,
+          nukedKey.split('|').includes(neighbourhood.id)
+            ? nukedLayout(neighbourhood.layout)
+            : neighbourhood.layout,
         ]),
       ),
     [world, nukedKey],
@@ -278,15 +286,22 @@ export default function CityView({
   // The ruined look of a neighbourhood that is being restored, which the wave
   // sweeps away.
   const restoringKey = world.neighbourhoods
-    .filter((n) => strikes.phases.get(n.id) === 'restoring')
-    .map((n) => n.id)
+    .filter(
+      (neighbourhood) => strikes.phases.get(neighbourhood.id) === 'restoring',
+    )
+    .map((neighbourhood) => neighbourhood.id)
     .join('|')
   const ruinedLayouts = useMemo(
     () =>
       new Map(
         world.neighbourhoods
-          .filter((n) => restoringKey.split('|').includes(n.id))
-          .map((n) => [n.id, nukedLayout(n.layout)]),
+          .filter((neighbourhood) =>
+            restoringKey.split('|').includes(neighbourhood.id),
+          )
+          .map((neighbourhood) => [
+            neighbourhood.id,
+            nukedLayout(neighbourhood.layout),
+          ]),
       ),
     [world, restoringKey],
   )
@@ -294,14 +309,24 @@ export default function CityView({
     MIN_TOP,
     // The cloud of a nuked tile is as tall as its tile makes it.
     ...world.neighbourhoods
-      .filter((n) => nuked.has(n.id))
-      .map((n) => nukeHeight(n.layout.halfWidth, n.layout.halfDepth)),
-    ...world.neighbourhoods.flatMap((n) => n.layout.lots.map((l) => l.height)),
+      .filter((neighbourhood) => nuked.has(neighbourhood.id))
+      .map((neighbourhood) =>
+        nukeHeight(
+          neighbourhood.layout.halfWidth,
+          neighbourhood.layout.halfDepth,
+        ),
+      ),
+    ...world.neighbourhoods.flatMap((neighbourhood) =>
+      neighbourhood.layout.lots.map((lot) => lot.height),
+    ),
   )
   const frame = useMemo(() => worldFrame(world, top), [world, top])
   const airport = useMemo(() => findAirport(world), [world])
   const borderColorOf = useMemo(
-    () => borderColors(world.neighbourhoods.map((n) => n.id)),
+    () =>
+      borderColors(
+        world.neighbourhoods.map((neighbourhood) => neighbourhood.id),
+      ),
     [world],
   )
   // The kinds of label to show.
@@ -331,7 +356,9 @@ export default function CityView({
   const buildingId =
     building && building.plate === focusedId ? building.lot : null
   const focusFrame = useMemo(() => {
-    const plate = world.neighbourhoods.find((n) => n.id === focusedId)
+    const plate = world.neighbourhoods.find(
+      (neighbourhood) => neighbourhood.id === focusedId,
+    )
     if (!plate) return null
     // Framed up to its own tallest building, to center what it shows.
     const tallest = Math.max(
@@ -339,7 +366,7 @@ export default function CityView({
       nuked.has(plate.id)
         ? nukeHeight(plate.layout.halfWidth, plate.layout.halfDepth)
         : 0,
-      ...plate.layout.lots.map((l) => l.height),
+      ...plate.layout.lots.map((lot) => lot.height),
     )
     return plateFrame(plate, tallest)
     // `nukedKey` stands for `nuked`.
@@ -352,8 +379,10 @@ export default function CityView({
     [world, focusedId, focusFrame, top],
   )
   const buildingFocus = useMemo(() => {
-    const plate = world.neighbourhoods.find((n) => n.id === focusedId)
-    const lot = plate?.layout.lots.find((l) => l.id === buildingId)
+    const plate = world.neighbourhoods.find(
+      (neighbourhood) => neighbourhood.id === focusedId,
+    )
+    const lot = plate?.layout.lots.find((lot) => lot.id === buildingId)
     return plate && lot && focusFrame
       ? buildingFrame(plate, lot, focusFrame.target)
       : null
@@ -369,8 +398,8 @@ export default function CityView({
   const view = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!focusedId) return
-    const onPointerDown = (e: PointerEvent) => {
-      if (!view.current?.contains(e.target as Node)) {
+    const onPointerDown = (event: PointerEvent) => {
+      if (!view.current?.contains(event.target as Node)) {
         if (buildingId) setBuilding(null)
         else setFocusedId(null)
       }
@@ -402,8 +431,8 @@ export default function CityView({
   // A click anywhere but on the badges and the list closes the list.
   useEffect(() => {
     if (!listed) return
-    const onPointerDown = (e: PointerEvent) => {
-      const target = e.target as Node
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node
       if (
         !statusUi.current?.contains(target) &&
         !(target as Element).closest?.('.city-title')
@@ -416,8 +445,8 @@ export default function CityView({
   // Escape leaves one level at a time, like a click outside: the list of services, then the
   // building, then the neighbourhood.
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
       const step = escapeStep({
         focused: !!focusedId,
         building: !!buildingId,
@@ -448,12 +477,12 @@ export default function CityView({
   }, [])
   const plots = useMemo(
     () =>
-      [...world.neighbourhoods, ...world.wilds].map((n) => ({
-        id: n.id,
-        x: n.x,
-        z: n.z,
-        halfWidth: n.layout.halfWidth,
-        halfDepth: n.layout.halfDepth,
+      [...world.neighbourhoods, ...world.wilds].map((neighbourhood) => ({
+        id: neighbourhood.id,
+        x: neighbourhood.x,
+        z: neighbourhood.z,
+        halfWidth: neighbourhood.layout.halfWidth,
+        halfDepth: neighbourhood.layout.halfDepth,
       })),
     [world],
   )
@@ -519,15 +548,15 @@ export default function CityView({
           visible={!focusedId && effects.has('clouds')}
           density={densities.clouds}
         />
-        {world.wilds.map((n) => (
+        {world.wilds.map((neighbourhood) => (
           <Plate
-            key={n.id}
-            plate={n}
+            key={neighbourhood.id}
+            plate={neighbourhood}
             focus={null}
             inert
             exploded={exploded}
             register={register}
-            popDelay={pops.get(n.id)}
+            popDelay={pops.get(neighbourhood.id)}
             pose={
               focusFrame && focusedId
                 ? { center: focusFrame.target, scale: FAR }
@@ -536,7 +565,7 @@ export default function CityView({
             pickable={false}
             onSelect={back}
           >
-            <Scenery layout={n.layout} />
+            <Scenery layout={neighbourhood.layout} />
           </Plate>
         ))}
         {world.neighbourhoods.map((n) => {

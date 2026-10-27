@@ -75,12 +75,12 @@ function weights({ u, v, front }: Spot): Record<Biome, number> {
 }
 
 function pick(roll: number, options: Partial<Record<Biome, number>>): Biome {
-  const list = BIOMES.filter((b) => (options[b] ?? 0) > 0)
-  const total = list.reduce((sum, b) => sum + options[b]!, 0)
+  const list = BIOMES.filter((biome) => (options[biome] ?? 0) > 0)
+  const total = list.reduce((sum, biome) => sum + options[biome]!, 0)
   let left = roll * total
-  for (const b of list) {
-    left -= options[b]!
-    if (left < 0) return b
+  for (const biome of list) {
+    left -= options[biome]!
+    if (left < 0) return biome
   }
   return list[list.length - 1]
 }
@@ -121,7 +121,7 @@ export function secondBiome(
   // On the side of a neighbour that has it, when there is one.
   const along = near.find((n) => n.biome === second)
   if (along) return { second, side: along.side }
-  const sides = SIDES.filter((s) => allowed(main, second, s, spot))
+  const sides = SIDES.filter((side) => allowed(main, second, side, spot))
   if (sides.length === 0) return {}
   return { second, side: sides[Math.floor(roll('side') * sides.length)] }
 }

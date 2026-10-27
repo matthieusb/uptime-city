@@ -12,5 +12,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['tests/setup.ts'],
     include: ['tests/unit/**/*.test.{ts,tsx}'],
+    // The layout of the map is CPU-bound, and slow when the files run in parallel.
+    testTimeout: 30000,
   },
 })

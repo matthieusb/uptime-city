@@ -139,13 +139,13 @@ export function Label({
   order?: number
 }) {
   const hidden = useContext(LabelsHidden)
-  const gl = useThree((s) => s.gl)
+  const gl = useThree((rootState) => rootState.gl)
   const sprite = useRef<Sprite>(null)
   const pulse = useRef<Sprite>(null)
   // Badges are often rebuilt on render: compare them by what they show.
   const badgeKey = [badge ?? []]
     .flat()
-    .map((b) => `${b.text}|${b.color}|${b.textColor}`)
+    .map((badge) => `${badge.text}|${badge.color}|${badge.textColor}`)
     .join()
   const label = useMemo(() => labelTexture(text, badge), [text, badgeKey])
   useEffect(

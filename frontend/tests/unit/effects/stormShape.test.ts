@@ -8,7 +8,8 @@ import {
 } from '../../../src/city/effects/stormShape'
 
 const clouds = cloudsFor(24, 16)
-const ofKind = (kind: Cloud['kind']) => clouds.filter((c) => c.kind === kind)
+const ofKind = (kind: Cloud['kind']) =>
+  clouds.filter((cloud) => cloud.kind === kind)
 const FALL = 12
 const times = Array.from({ length: 1500 }, (_, i) => i * 0.1)
 
@@ -30,8 +31,10 @@ describe('raindrops', () => {
 
   it('stays under the cloud, not far past its edges', () => {
     for (const cloud of clouds) {
-      const reachX = Math.max(...cloud.blocks.map((b) => Math.abs(b.x))) + 1
-      const reachZ = Math.max(...cloud.blocks.map((b) => Math.abs(b.z))) + 1
+      const reachX =
+        Math.max(...cloud.blocks.map((block) => Math.abs(block.x))) + 1
+      const reachZ =
+        Math.max(...cloud.blocks.map((block) => Math.abs(block.z))) + 1
       for (const drop of raindrops(cloud)) {
         expect(Math.abs(drop.x)).toBeLessThanOrEqual(reachX)
         expect(Math.abs(drop.z)).toBeLessThanOrEqual(reachZ)
@@ -68,7 +71,7 @@ describe('dropPose', () => {
   })
 
   it('does not drop all the rain together', () => {
-    const heights = drops.map((d) => dropPose(d, 0, FALL).y.toFixed(1))
+    const heights = drops.map((drop) => dropPose(drop, 0, FALL).y.toFixed(1))
     expect(new Set(heights).size).toBeGreaterThan(drops.length / 2)
   })
 })

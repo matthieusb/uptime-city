@@ -18,7 +18,7 @@ const growths = Array.from({ length: 21 }, (_, i) => i / 20)
 const parts: [
   string,
   number,
-  (k: number, g: number, t: number, o: Cube) => Cube,
+  (k: number, g: number, t: number, cube: Cube) => Cube,
 ][] = [
   ['fireball', BALL_CUBES, ballCube],
   ['cap', CAP_CUBES, capCube],
@@ -66,7 +66,7 @@ describe.each(parts)('the cubes of the %s', (name, count, place) => {
 describe('the cloud as it grows', () => {
   const shown = (place: (typeof parts)[number][2], count: number, g: number) =>
     Array.from({ length: count }, (_, k) => place(k, g, 0, newCube())).filter(
-      (c) => c.scale > 0,
+      (cube) => cube.scale > 0,
     ).length
 
   it('has no cap and no stem before the strike, and all of them once grown', () => {

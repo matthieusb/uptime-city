@@ -62,7 +62,9 @@ export default function Explosion({
     if (!instances) return
     let changed = false
     for (let floor = 1; floor <= services; floor++) {
-      const found = exploded.current?.find((r) => r.floor === floor)
+      const found = exploded.current?.find(
+        (exploded) => exploded.floor === floor,
+      )
       const age = found ? clock.elapsedTime - found.start : -1
       const active = explosionActive(age)
       if (!active && !drawn.current.has(floor)) continue

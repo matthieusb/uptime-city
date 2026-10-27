@@ -29,7 +29,7 @@ export default function DetailMenu({
           max={DETAIL_MAX}
           step={DETAIL_STEP}
           value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
+          onChange={(event) => onChange(Number(event.target.value))}
         />
       </label>
     </div>

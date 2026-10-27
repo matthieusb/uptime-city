@@ -42,8 +42,8 @@ describe('wavePlanes', () => {
       expect(distance).toBeCloseTo(7)
     }
     // All around: as many planes point left as right, and up as down.
-    expect(planes.reduce((n, p) => n + p.x, 0)).toBeCloseTo(0)
-    expect(planes.reduce((n, p) => n + p.z, 0)).toBeCloseTo(0)
+    expect(planes.reduce((n, wavePlane) => n + wavePlane.x, 0)).toBeCloseTo(0)
+    expect(planes.reduce((n, wavePlane) => n + wavePlane.z, 0)).toBeCloseTo(0)
   })
 })
 

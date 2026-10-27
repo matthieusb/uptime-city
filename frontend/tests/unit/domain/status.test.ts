@@ -46,22 +46,22 @@ describe('buildingGlow', () => {
 
   it('breathes softly in green when up', () => {
     const glows = samples('up')
-    const intensities = glows.map((g) => g.intensity)
-    expect(glows.every((g) => g.color === statusColor('up'))).toBe(true)
+    const intensities = glows.map((glow) => glow.intensity)
+    expect(glows.every((glow) => glow.color === statusColor('up'))).toBe(true)
     expect(Math.max(...intensities)).toBeLessThanOrEqual(0.5)
     expect(Math.max(...intensities) - Math.min(...intensities)).toBeGreaterThan(
       0.1,
     )
-    expect(glows.every((g) => !g.onFire)).toBe(true)
+    expect(glows.every((glow) => !glow.onFire)).toBe(true)
   })
 
   it('burns and blinks slowly in red when down', () => {
     const glows = samples('down')
-    const intensities = glows.map((g) => g.intensity)
-    expect(glows.every((g) => g.color === statusColor('down'))).toBe(true)
+    const intensities = glows.map((glow) => glow.intensity)
+    expect(glows.every((glow) => glow.color === statusColor('down'))).toBe(true)
     expect(Math.max(...intensities)).toBeGreaterThan(0.8)
     expect(Math.min(...intensities)).toBeLessThan(0.3)
-    expect(glows.every((g) => g.onFire)).toBe(true)
+    expect(glows.every((glow) => glow.onFire)).toBe(true)
   })
 
   it('blinks slower than once per second', () => {
@@ -72,7 +72,7 @@ describe('buildingGlow', () => {
   })
 
   it('does not glow when unknown', () => {
-    expect(samples('unknown').every((g) => g.intensity === 0)).toBe(true)
+    expect(samples('unknown').every((glow) => glow.intensity === 0)).toBe(true)
   })
 })
 

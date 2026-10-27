@@ -63,12 +63,12 @@ export default function ServiceGraph({
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const stopDragging = useRef<(() => void) | null>(null)
   useEffect(() => () => stopDragging.current?.(), [])
-  const startDragging = (e: ReactMouseEvent) => {
-    if ((e.target as Element).closest('button')) return
-    e.preventDefault()
-    const from = { x: e.clientX - offset.x, y: e.clientY - offset.y }
-    const move = (m: MouseEvent) =>
-      setOffset({ x: m.clientX - from.x, y: m.clientY - from.y })
+  const startDragging = (event: ReactMouseEvent) => {
+    if ((event.target as Element).closest('button')) return
+    event.preventDefault()
+    const from = { x: event.clientX - offset.x, y: event.clientY - offset.y }
+    const move = (event: MouseEvent) =>
+      setOffset({ x: event.clientX - from.x, y: event.clientY - from.y })
     const stop = () => {
       document.removeEventListener('mousemove', move)
       document.removeEventListener('mouseup', stop)
@@ -87,16 +87,17 @@ export default function ServiceGraph({
   const plotRight = size.width - PLOT.right
   const plotBottom = size.height - PLOT.bottom
   const [hover, setHover] = useState<GraphPoint | null>(null)
-  const onMove = (e: ReactMouseEvent<SVGSVGElement>) =>
+  const onMove = (event: ReactMouseEvent<SVGSVGElement>) =>
     setHover(
       nearestPoint(
         model.points,
-        e.clientX - e.currentTarget.getBoundingClientRect().left,
+        event.clientX - event.currentTarget.getBoundingClientRect().left,
         HOVER_REACH,
       ),
     )
   // A check that left the data (a newer batch of results) cannot stay hovered.
-  const shown = hover && model.points.find((p) => p.ts === hover.ts)
+  const shown =
+    hover && model.points.find((graphPoint) => graphPoint.ts === hover.ts)
 
   return (
     <section
@@ -192,7 +193,9 @@ export default function ServiceGraph({
             {model.line.length > 1 && (
               <polyline
                 data-testid="graph-line"
-                points={model.line.map((p) => `${p.x},${p.y}`).join(' ')}
+                points={model.line
+                  .map((graphPoint) => `${graphPoint.x},${graphPoint.y}`)
+                  .join(' ')}
                 fill="none"
                 stroke={LINE_COLOR}
                 strokeWidth={1.5}

@@ -147,7 +147,7 @@ export default function Trains({
         const train = trainOf(id, density, length)
         return train.carriages.map((carriage, j): Slot => {
           const parts = PARTS[carriage.kind]
-          const colors = [...new Set(parts.map((p) => p.color))]
+          const colors = [...new Set(parts.map((part) => part.color))]
           const materials = new Map(
             colors.map((color) => [
               color,

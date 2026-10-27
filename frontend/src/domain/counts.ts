@@ -30,10 +30,10 @@ export function hostCounts(
 ): ServiceCounts {
   return [group, ...group.vms]
     .map((building) => buildingCounts(building, history))
-    .reduce((a, b) => ({
-      up: a.up + b.up,
-      down: a.down + b.down,
-      unknown: a.unknown + b.unknown,
+    .reduce((serviceCounts, b) => ({
+      up: serviceCounts.up + b.up,
+      down: serviceCounts.down + b.down,
+      unknown: serviceCounts.unknown + b.unknown,
     }))
 }
 
@@ -45,10 +45,10 @@ export function totalCounts(
   return groups
     .map((group) => hostCounts(group, history))
     .reduce(
-      (a, b) => ({
-        up: a.up + b.up,
-        down: a.down + b.down,
-        unknown: a.unknown + b.unknown,
+      (serviceCounts, b) => ({
+        up: serviceCounts.up + b.up,
+        down: serviceCounts.down + b.down,
+        unknown: serviceCounts.unknown + b.unknown,
       }),
       { up: 0, down: 0, unknown: 0 },
     )

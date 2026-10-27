@@ -99,7 +99,9 @@ export const PLANE_KINDS: PlaneKind[] = ['tourism', 'cargo', 'jumbo']
 
 // The kinds of plane an airport has: the light plane always, the others from a long enough runway.
 export function kindsOf(layout: AirportLayout): PlaneKind[] {
-  return PLANE_KINDS.filter((k) => layout.length >= CRAFT[k].minRunway)
+  return PLANE_KINDS.filter(
+    (planeKind) => layout.length >= CRAFT[planeKind].minRunway,
+  )
 }
 
 // The kind of plane `i` in cycle `c`, by hash, among those the airport has: about half tourism, a
@@ -110,11 +112,14 @@ export function flightKind(
   c: number,
 ): PlaneKind {
   const kinds = kindsOf(layout)
-  const total = kinds.reduce((sum, k) => sum + CRAFT[k].weight, 0)
+  const total = kinds.reduce(
+    (sum, planeKind) => sum + CRAFT[planeKind].weight,
+    0,
+  )
   let roll = hash(`flight:${i}:${c}:kind`) % total
-  for (const k of kinds) {
-    roll -= CRAFT[k].weight
-    if (roll < 0) return k
+  for (const planeKind of kinds) {
+    roll -= CRAFT[planeKind].weight
+    if (roll < 0) return planeKind
   }
   return kinds[0]
 }
@@ -460,18 +465,18 @@ function flightOf(spec: AirportSpec, i: number, c: number): Flight {
 // The schedule: when the flight of plane `i` begins and ends in cycle `c`, and whether the plane
 // is parked for long enough (always, by construction).
 export function flightTimes(spec: AirportSpec, i: number, c: number) {
-  const f = flightOf(spec, i, c)
+  const flight = flightOf(spec, i, c)
   return {
-    start: f.start,
-    touchdown: f.touchdown,
-    arrivedAt: f.arrivedAt,
-    turnStart: f.turnStart,
-    rollStart: f.rollStart,
-    liftOff: f.liftOff,
-    end: f.end,
-    landing: f.landing,
-    takeoff: f.takeoff,
-    kind: f.kind,
+    start: flight.start,
+    touchdown: flight.touchdown,
+    arrivedAt: flight.arrivedAt,
+    turnStart: flight.turnStart,
+    rollStart: flight.rollStart,
+    liftOff: flight.liftOff,
+    end: flight.end,
+    landing: flight.landing,
+    takeoff: flight.takeoff,
+    kind: flight.kind,
   }
 }
 
@@ -490,14 +495,14 @@ interface Local {
 
 // In the air, `d` tiles from the touchdown or from the lift-off.
 function airborne(
-  f: Flight,
+  flight: Flight,
   d: number,
   arriving: boolean,
   spec: AirportSpec,
 ): Local {
   const half = spec.layout.length / 2
-  const dir = arriving ? f.landing : f.takeoff
-  const profile = arriving ? f.craft.descent : f.craft.climb
+  const dir = arriving ? flight.landing : flight.takeoff
+  const profile = arriving ? flight.craft.descent : flight.craft.climb
   const side = arriving ? 1 : -1
   const point = (e: number) => {
     // Arrivals come from further out than they fly in: the lateral offset closes up to 0.
@@ -505,7 +510,9 @@ function airborne(
       ? LATERAL * smooth((e - 20) / 40)
       : LATERAL * smooth(e / 40)
     // `dir` is where it heads; `e` is measured from the touchdown or the lift-off.
-    const along = arriving ? -dir * (half - 2) - dir * e : f.liftX + dir * e
+    const along = arriving
+      ? -dir * (half - 2) - dir * e
+      : flight.liftX + dir * e
     return {
       x: along,
       z: RUNWAY_Z + side * lateral,
@@ -529,9 +536,13 @@ function airborne(
   }
 }
 
-function localState(spec: AirportSpec, f: Flight, t: number): Local | null {
+function localState(
+  spec: AirportSpec,
+  flight: Flight,
+  t: number,
+): Local | null {
   const half = spec.layout.length / 2
-  if (t < f.start || t > f.end) return null
+  if (t < flight.start || t > flight.end) return null
   const ground = (p: { x: number; z: number; heading: number }): Local => ({
     x: p.x,
     y: 0,
@@ -539,67 +550,67 @@ function localState(spec: AirportSpec, f: Flight, t: number): Local | null {
     heading: p.heading,
     pitch: 0,
   })
-  if (t < f.touchdown) {
-    const d = f.approach - f.craft.vFly * (t - f.start)
-    return airborne(f, d, true, spec)
+  if (t < flight.touchdown) {
+    const d = flight.approach - flight.craft.vFly * (t - flight.start)
+    return airborne(flight, d, true, spec)
   }
-  if (t < f.rolloutEnd) {
-    const e = t - f.touchdown
-    const { vFly, vTaxi } = f.craft
-    const a = (vFly - vTaxi) / f.rollout
+  if (t < flight.rolloutEnd) {
+    const e = t - flight.touchdown
+    const { vFly, vTaxi } = flight.craft
+    const a = (vFly - vTaxi) / flight.rollout
     const s = vFly * e - (a * e * e) / 2
     return ground({
-      x: -f.landing * (half - 2) + f.landing * s,
+      x: -flight.landing * (half - 2) + flight.landing * s,
       z: RUNWAY_Z,
-      heading: f.landing > 0 ? 0 : Math.PI,
+      heading: flight.landing > 0 ? 0 : Math.PI,
     })
   }
-  if (t < f.arrivedAt) {
+  if (t < flight.arrivedAt) {
     const s = legDistance(
-      t - f.rolloutEnd,
-      f.taxiIn.length,
-      f.craft.vTaxi,
+      t - flight.rolloutEnd,
+      flight.taxiIn.length,
+      flight.craft.vTaxi,
       false,
       true,
     )
-    return ground(f.taxiIn.at(s))
+    return ground(flight.taxiIn.at(s))
   }
-  const [parkedX, parkedZ] = [spec.layout.standX[f.stand], STAND_Z]
-  if (t < f.turnStart) {
+  const [parkedX, parkedZ] = [spec.layout.standX[flight.stand], STAND_Z]
+  if (t < flight.turnStart) {
     return ground({ x: parkedX, z: parkedZ, heading: Math.PI / 2 })
   }
-  if (t < f.taxiStart) {
+  if (t < flight.taxiStart) {
     // It turns round on the spot, nose to the taxiway.
-    const u = (t - f.turnStart) / (f.taxiStart - f.turnStart)
+    const u = (t - flight.turnStart) / (flight.taxiStart - flight.turnStart)
     return ground({
       x: parkedX,
       z: parkedZ,
       heading: Math.PI / 2 - Math.PI * smooth(u),
     })
   }
-  if (t < f.rollStart) {
+  if (t < flight.rollStart) {
     const s = legDistance(
-      t - f.taxiStart,
-      f.taxiOut.length,
-      f.craft.vTaxi,
+      t - flight.taxiStart,
+      flight.taxiOut.length,
+      flight.craft.vTaxi,
       true,
       false,
     )
-    return ground(f.taxiOut.at(s))
+    return ground(flight.taxiOut.at(s))
   }
-  const roll = f.liftOff - f.rollStart
-  if (t < f.liftOff) {
-    const e = t - f.rollStart
-    const { vFly, vTaxi } = f.craft
+  const roll = flight.liftOff - flight.rollStart
+  if (t < flight.liftOff) {
+    const e = t - flight.rollStart
+    const { vFly, vTaxi } = flight.craft
     const a = (vFly - vTaxi) / roll
     const s = vTaxi * e + (a * e * e) / 2
     return ground({
-      x: -f.takeoff * (half - 5.5) + f.takeoff * s,
+      x: -flight.takeoff * (half - 5.5) + flight.takeoff * s,
       z: RUNWAY_Z,
-      heading: f.takeoff > 0 ? 0 : Math.PI,
+      heading: flight.takeoff > 0 ? 0 : Math.PI,
     })
   }
-  return airborne(f, f.craft.vFly * (t - f.liftOff), false, spec)
+  return airborne(flight, flight.craft.vFly * (t - flight.liftOff), false, spec)
 }
 
 // Plane `i` in the airport frame at time `t` (seconds), or inactive.
@@ -610,9 +621,9 @@ export function planeLocal(
 ): (Local & { livery: number; kind: PlaneKind }) | null {
   const c0 = Math.floor(t / cycleOf(spec))
   for (const c of [c0 + 1, c0, c0 - 1]) {
-    const f = flightOf(spec, i, c)
-    const local = localState(spec, f, t)
-    if (local) return { ...local, livery: f.livery, kind: f.kind }
+    const flight = flightOf(spec, i, c)
+    const local = localState(spec, flight, t)
+    if (local) return { ...local, livery: flight.livery, kind: flight.kind }
   }
   return null
 }

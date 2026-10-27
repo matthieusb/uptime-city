@@ -137,8 +137,8 @@ function useMaterials(count: number): Materials[] {
   )
   useEffect(
     () => () => {
-      for (const m of all)
-        for (const material of Object.values(m)) material.dispose()
+      for (const materials of all)
+        for (const material of Object.values(materials)) material.dispose()
     },
     [all],
   )
@@ -192,7 +192,7 @@ export function usePlanePool(count = MAX_PLANES): {
     }
   }
 
-  const bodies = materials.map((m, i) => (
+  const bodies = materials.map((materials, i) => (
     <group
       key={i}
       ref={(node) => {
@@ -208,9 +208,14 @@ export function usePlanePool(count = MAX_PLANES): {
           }}
           visible={kind === 'tourism'}
         >
-          {PARTS[kind].map((p, n) => (
-            <mesh key={n} position={p.at} castShadow material={m[p.tone]}>
-              <boxGeometry args={p.size} />
+          {PARTS[kind].map((part, n) => (
+            <mesh
+              key={n}
+              position={part.at}
+              castShadow
+              material={materials[part.tone]}
+            >
+              <boxGeometry args={part.size} />
             </mesh>
           ))}
         </group>

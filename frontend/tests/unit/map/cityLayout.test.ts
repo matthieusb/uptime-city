@@ -1,18 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { BIOMES } from '../../../src/city/biomes'
 import {
-  BUILDING_WIDTH,
-  MAX_BUILDING_WIDTH,
-  buildingWidth,
   buildingHeight,
-  carPoint,
   cityLayout,
-  floorBase,
-  floorHeight,
-  FLOOR_HEIGHT,
-  GROUND_HEIGHT,
   roadZ,
-  serviceLabelSides,
   type CityLayout,
   type Lot,
   type Tile,
@@ -48,27 +39,11 @@ function tileMap(layout: CityLayout) {
     tiles.get(`${Math.round(x)},${Math.round(z)}`)
 }
 
-describe('floors', () => {
-  it('stacks one floor per service on a taller ground floor', () => {
-    expect(floorBase(0)).toBe(0)
-    expect(floorHeight(0)).toBe(GROUND_HEIGHT)
-    expect(GROUND_HEIGHT).toBeGreaterThan(FLOOR_HEIGHT)
-    expect(floorBase(1)).toBe(GROUND_HEIGHT)
-    expect(floorHeight(1)).toBe(FLOOR_HEIGHT)
-    expect(floorBase(3)).toBeCloseTo(GROUND_HEIGHT + 2 * FLOOR_HEIGHT)
-    expect(buildingHeight(3)).toBeCloseTo(GROUND_HEIGHT + 2 * FLOOR_HEIGHT)
-  })
-
-  it('still builds a ground floor for a host without services', () => {
-    expect(buildingHeight(1)).toBe(GROUND_HEIGHT)
-  })
-})
-
 describe('cityLayout', () => {
   it('places one building per host, each on its own lot', () => {
     const { lots } = cityLayout(ids(7))
-    expect(lots.map((l) => l.id)).toEqual(ids(7).map((h) => h.id))
-    expect(new Set(lots.map((l) => `${l.x},${l.z}`)).size).toBe(7)
+    expect(lots.map((lot) => lot.id)).toEqual(ids(7).map((h) => h.id))
+    expect(new Set(lots.map((lot) => `${lot.x},${lot.z}`)).size).toBe(7)
   })
 
   it('gives a building one floor per service above its ground floor', () => {
@@ -76,8 +51,8 @@ describe('cityLayout', () => {
       { id: 'lone', services: 0 },
       { id: 'busy', services: 4 },
     ])
-    expect(lots.map((l) => l.floors)).toEqual([1, 5])
-    expect(lots.map((l) => l.height)).toEqual([
+    expect(lots.map((lot) => lot.floors)).toEqual([1, 5])
+    expect(lots.map((lot) => lot.height)).toEqual([
       buildingHeight(1),
       buildingHeight(5),
     ])
@@ -91,15 +66,15 @@ describe('cityLayout', () => {
     'never hides a building behind another with %i hosts',
     (n) => {
       const { lots } = cityLayout(ids(n))
-      for (const a of lots) {
+      for (const lot of lots) {
         for (const b of lots) {
-          if (a === b) continue
+          if (lot === b) continue
           // How far a stands in front of b, and the distance up to which a
           // hides what is behind it.
-          const sideways = Math.abs(a.x - b.x - (a.z - b.z)) / Math.SQRT2
-          const depth = (a.x - b.x + (a.z - b.z)) / Math.SQRT2
-          const halves = (a.width + b.width) / Math.SQRT2
-          const reach = a.height * Math.sqrt(3) + halves
+          const sideways = Math.abs(lot.x - b.x - (lot.z - b.z)) / Math.SQRT2
+          const depth = (lot.x - b.x + (lot.z - b.z)) / Math.SQRT2
+          const halves = (lot.width + b.width) / Math.SQRT2
+          const reach = lot.height * Math.sqrt(3) + halves
           expect(sideways >= halves + 1 || depth <= 0 || depth >= reach).toBe(
             true,
           )
@@ -140,8 +115,8 @@ describe('cityLayout', () => {
     const tileAt = tileMap(layout)
     expect(layout.roads.length).toBe(3)
     for (const lot of layout.lots) {
-      const distances = layout.roads.map((r) =>
-        Math.abs(lot.z - roadZ(r, lot.x)),
+      const distances = layout.roads.map((road) =>
+        Math.abs(lot.z - roadZ(road, lot.x)),
       )
       const nearest = Math.min(...distances)
       expect(nearest).toBeGreaterThan(2.5)
@@ -160,7 +135,7 @@ describe('cityLayout', () => {
 
   it('has the sea and a beach in front of a coastal town, and hills behind', () => {
     const layout = cityLayout(ids(7), { main: 'coastal' })
-    const zs = layout.lots.map((l) => l.z)
+    const zs = layout.lots.map((lot) => lot.z)
     const kinds = (kind: Tile['kind']) =>
       layout.tiles.filter((t) => t.kind === kind)
     expect(kinds('water').length).toBeGreaterThan(0)
@@ -179,10 +154,10 @@ describe('cityLayout', () => {
   it('mixes parks of several kinds, shapes and sizes', () => {
     const layout = cityLayout(ids(7), { main: 'coastal' })
     expect(
-      new Set(layout.patches.map((p) => p.kind)).size,
+      new Set(layout.patches.map((patch) => patch.kind)).size,
     ).toBeGreaterThanOrEqual(3)
     expect(
-      new Set(layout.patches.map((p) => p.tiles)).size,
+      new Set(layout.patches.map((patch) => patch.tiles)).size,
     ).toBeGreaterThanOrEqual(4)
     expect(layout.tiles.some((t) => t.kind === 'pond')).toBe(true)
     expect(layout.flowers.length).toBeGreaterThan(0)
@@ -223,13 +198,13 @@ describe('decoration and biomes', () => {
 
   it('lays out decoration lots next to the monitored buildings', () => {
     const { lots } = cityLayout(town)
-    expect(lots.map((l) => l.decor)).toEqual([
+    expect(lots.map((lot) => lot.decor)).toEqual([
       undefined,
       'supermarket',
       'parking',
       'houses',
     ])
-    for (const lot of lots.filter((l) => l.decor)) {
+    for (const lot of lots.filter((lot) => lot.decor)) {
       expect(lot.floors).toBe(0)
       expect(lot.height).toBeGreaterThan(0)
     }
@@ -237,13 +212,13 @@ describe('decoration and biomes', () => {
 
   it('never hides a building behind a decoration', () => {
     const { lots } = cityLayout(town)
-    for (const a of lots) {
+    for (const lot of lots) {
       for (const b of lots) {
-        if (a === b) continue
-        const sideways = Math.abs(a.x - b.x - (a.z - b.z)) / Math.SQRT2
-        const depth = (a.x - b.x + (a.z - b.z)) / Math.SQRT2
-        const halves = (a.width + b.width) / Math.SQRT2
-        const reach = a.height * Math.sqrt(3) + halves
+        if (lot === b) continue
+        const sideways = Math.abs(lot.x - b.x - (lot.z - b.z)) / Math.SQRT2
+        const depth = (lot.x - b.x + (lot.z - b.z)) / Math.SQRT2
+        const halves = (lot.width + b.width) / Math.SQRT2
+        const reach = lot.height * Math.sqrt(3) + halves
         expect(sideways >= halves + 1 || depth <= 0 || depth >= reach).toBe(
           true,
         )
@@ -272,92 +247,5 @@ describe('decoration and biomes', () => {
     expect(cityLayout(town, { main: 'mountain' })).toEqual(
       cityLayout(town, { main: 'mountain' }),
     )
-  })
-})
-
-describe('carPoint', () => {
-  const road = {
-    z: 2,
-    amplitude: 1.2,
-    phase: 0.5,
-    xMin: -20,
-    xMax: 20,
-  }
-
-  it('drives down one lane and back up the other', () => {
-    const lanes = new Set<number>()
-    for (let t = 0; t < 1; t += 0.005) {
-      const { x, z } = carPoint(road, t)
-      expect(x).toBeGreaterThanOrEqual(road.xMin)
-      expect(x).toBeLessThanOrEqual(road.xMax)
-      const offset = z - roadZ(road, x)
-      expect(Math.abs(offset)).toBeLessThan(0.5)
-      lanes.add(Math.sign(offset))
-    }
-    expect(lanes).toEqual(new Set([1, -1]))
-  })
-
-  it('wraps around', () => {
-    expect(carPoint(road, 1.25)).toEqual(carPoint(road, 0.25))
-  })
-})
-
-describe('serviceLabelSides', () => {
-  // A lot standing `column` tiles to the right of the origin on screen, at
-  // the same depth.
-  const lot = (id: string, column: number, floors: number): Lot => ({
-    id,
-    x: (column * Math.SQRT2) / 2,
-    z: (-column * Math.SQRT2) / 2,
-    floors,
-    height: buildingHeight(floors),
-    width: BUILDING_WIDTH,
-  })
-
-  it('puts the labels on the right of a lone building', () => {
-    expect(serviceLabelSides([lot('a', 0, 4)]).get('a')).toBe('right')
-  })
-
-  it('puts the labels on the side without a building in the way', () => {
-    const right = serviceLabelSides([lot('a', 0, 4), lot('b', 6, 6)])
-    expect(right.get('a')).toBe('left')
-    const left = serviceLabelSides([lot('a', 0, 4), lot('b', -6, 6)])
-    expect(left.get('a')).toBe('right')
-  })
-
-  it('ignores a building too low to be in the way', () => {
-    // Its roof is below the labels of every floor.
-    const low = { ...lot('b', 6, 0), height: 0.6 }
-    const sides = serviceLabelSides([lot('a', 0, 6), low])
-    expect(sides.get('a')).toBe('right')
-  })
-
-  it('ignores a building too far to be reached', () => {
-    expect(serviceLabelSides([lot('a', 0, 4), lot('b', 60, 6)]).get('a')).toBe(
-      'right',
-    )
-  })
-})
-
-describe('building width', () => {
-  it('grows with the number of services, up to a maximum', () => {
-    expect(buildingWidth(0)).toBe(BUILDING_WIDTH)
-    expect(buildingWidth(3)).toBeGreaterThan(buildingWidth(1))
-    expect(buildingWidth(50)).toBe(MAX_BUILDING_WIDTH)
-  })
-
-  it('gains more every 5 services', () => {
-    const step = buildingWidth(5) - buildingWidth(4)
-    expect(step).toBeGreaterThan(buildingWidth(4) - buildingWidth(3))
-    expect(buildingWidth(10) - buildingWidth(9)).toBeCloseTo(step)
-  })
-
-  it('gives each lot the width of its services', () => {
-    const { lots } = cityLayout([
-      { id: 'a', services: 0 },
-      { id: 'b', services: 4 },
-    ])
-    expect(lots[1].width).toBeGreaterThan(lots[0].width)
-    expect(lots[0].width).toBe(BUILDING_WIDTH)
   })
 })

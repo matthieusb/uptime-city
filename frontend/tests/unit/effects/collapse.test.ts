@@ -205,9 +205,9 @@ describe('floorPose', () => {
       expect(pose.sy).toBeLessThan(1)
     }
     // Tumbled, not neatly stacked.
-    expect(poses(1).some((p) => Math.abs(p.rx) + Math.abs(p.rz) > 0.1)).toBe(
-      true,
-    )
+    expect(
+      poses(1).some((pose) => Math.abs(pose.rx) + Math.abs(pose.rz) > 0.1),
+    ).toBe(true)
   })
 
   it('keeps the pile low however many floors fell', () => {

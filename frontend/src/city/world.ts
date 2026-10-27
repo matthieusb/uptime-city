@@ -8,9 +8,7 @@
 // along X, roads along Z that link them, and roundabouts where they meet.
 import {
   mainBiome,
-  noise,
   secondBiome,
-  treeFor,
   type Biome,
   type Biomes,
   type Spot,
@@ -19,25 +17,26 @@ import {
   CRATER_TOP,
   cityLayout,
   fillerLayout,
-  GRASS_TOP,
-  hides,
-  ISLAND_TOP,
-  PLAZA_MARGIN,
-  ROAD_TOP,
-  SHALLOW_TOP,
-  TREE_HEIGHTS,
-  WATER_TOP,
   type CityLayout,
   type DecorKind,
   type HostSpec,
-  type Point,
-  type Road,
-  type Tile,
-  type TileKind,
 } from './layout'
 import { placeAirport } from './airport'
+import { layRoads } from './map/roads'
+import { carveSeas } from './map/seas'
+import { blendSeams } from './map/seams'
+import {
+  chooseRows,
+  rowDepth,
+  rowWidth,
+  sizeScore,
+  sizesOf,
+} from './map/sizing'
+import { clearWilds } from './map/wilds'
 import { placeMonuments } from './monuments'
 import { layTracks, type Track } from './tracks'
+
+export { sizeScore }
 
 // A physical host: the buildings it is monitored through, its own first and
 // then one per vm-host.
@@ -112,681 +111,19 @@ interface Placed {
 // The row of the first building that could cover part of a building of
 // another row on screen, as in layout.ts, or -1 if there is none.
 function hiderRow(lots: Placed[]): number {
-  for (const a of lots) {
+  for (const placed of lots) {
     for (const b of lots) {
-      if (a.row === b.row) continue
-      const sideways = Math.abs(a.x - b.x - (a.z - b.z)) / Math.SQRT2
-      const depth = (a.x - b.x + (a.z - b.z)) / Math.SQRT2
-      const halves = (a.width + b.width) / Math.SQRT2
-      const reach = a.height * Math.sqrt(3) + halves
+      if (placed.row === b.row) continue
+      const sideways = Math.abs(placed.x - b.x - (placed.z - b.z)) / Math.SQRT2
+      const depth = (placed.x - b.x + (placed.z - b.z)) / Math.SQRT2
+      const halves = (placed.width + b.width) / Math.SQRT2
+      const reach = placed.height * Math.sqrt(3) + halves
       if (sideways < halves + 1 && depth > 0 && depth < reach) {
-        return a.row
+        return placed.row
       }
     }
   }
   return -1
-}
-
-// Half the side of a roundabout, and how far from the middle of a road along
-// Z buildings stand, so that a roundabout fits wherever it meets a road.
-const ROUNDABOUT = 3
-const CLEARANCE = ROUNDABOUT + 0.5
-// About how far apart, along X, the roads along Z are.
-const WAY_SPACING = 28
-
-// The roads of the map. Each road of a neighbourhood runs on along X, as far
-// as no building is in the way: the roads at the front of a row cross the
-// whole map. Roads along Z link them where no building is in the way either,
-// and a roundabout stands wherever two roads meet. The roads are then painted
-// on the plates, over whatever was there, and each plate gets the pieces of
-// road on it, for its middle lines, and the roundabouts on it.
-function layRoads(world: World): World {
-  const plates = [...world.neighbourhoods, ...world.wilds]
-  const W = world.halfWidth
-  // The paved squares of all the buildings.
-  const squares = world.neighbourhoods.flatMap((n) =>
-    n.layout.lots.map((l) => {
-      const half = l.width / 2 + PLAZA_MARGIN
-      return {
-        x0: n.x + l.x - half,
-        x1: n.x + l.x + half,
-        z0: n.z + l.z - half,
-        z1: n.z + l.z + half,
-      }
-    }),
-  )
-  const blocked = (x0: number, x1: number, z0: number, z1: number) =>
-    squares.some((q) => q.x0 < x1 && q.x1 > x0 && q.z0 < z1 && q.z1 > z0)
-
-  // Along X: from its own plate on, both ways, a tile at a time, as long as
-  // it neither meets a building nor runs too close to another road along X.
-  const spans = world.neighbourhoods.flatMap((n) =>
-    n.layout.roads.map((road) => ({
-      at: n.z + road.z,
-      from: n.x - n.layout.halfWidth,
-      to: n.x + n.layout.halfWidth,
-    })),
-  )
-  const lines = new Map<number, [number, number][]>()
-  for (const span of spans) {
-    const { at } = span
-    const free = (x0: number, x1: number) =>
-      !blocked(x0, x1, at - 1.5, at + 1.5) &&
-      spans.every(
-        (o) =>
-          o.at === at ||
-          Math.abs(o.at - at) >= 2 * ROUNDABOUT + 1 ||
-          o.from >= x1 ||
-          o.to <= x0,
-      )
-    while (span.from > -W + 1e-6 && free(span.from - 1, span.from)) {
-      span.from--
-    }
-    while (span.to < W - 1e-6 && free(span.to, span.to + 1)) span.to++
-    lines.set(at, [...(lines.get(at) ?? []), [span.from, span.to]])
-  }
-  const horizontal: Way[] = [...lines].flatMap(([at, spans]) => {
-    // Overlapping or touching spans make one road.
-    const merged: [number, number][] = []
-    for (const [from, to] of spans.sort((a, b) => a[0] - b[0])) {
-      const last = merged[merged.length - 1]
-      if (last && from <= last[1] + 1e-6) last[1] = Math.max(last[1], to)
-      else merged.push([from, to])
-    }
-    return merged.map(([from, to]) => ({ vertical: false, at, from, to }))
-  })
-
-  // Along Z: on the edges between tiles, through the roads along X that
-  // reach them with room for a roundabout, between as many of them as no
-  // building stands in the way.
-  const [first] = plates[0].layout.tiles
-  const edge = plates[0].x + first.x + 0.5
-  const candidates: Way[] = []
-  for (
-    let x = edge + Math.ceil(-W + ROUNDABOUT - edge);
-    x <= W - ROUNDABOUT;
-    x++
-  ) {
-    const crossing = horizontal
-      .filter((h) => h.from <= x - ROUNDABOUT && h.to >= x + ROUNDABOUT)
-      .map((h) => h.at)
-      .sort((a, b) => a - b)
-    let best: [number, number] | null = null
-    let start = 0
-    for (let k = 0; k + 1 < crossing.length; k++) {
-      const open = !blocked(
-        x - CLEARANCE,
-        x + CLEARANCE,
-        crossing[k] - CLEARANCE,
-        crossing[k + 1] + CLEARANCE,
-      )
-      if (!open) {
-        start = k + 1
-        continue
-      }
-      if (!best || k + 1 - start > best[1] - best[0]) best = [start, k + 1]
-    }
-    if (best) {
-      candidates.push({
-        vertical: true,
-        at: x,
-        from: crossing[best[0]],
-        to: crossing[best[1]],
-      })
-    }
-  }
-  // About evenly spread: in each stretch of the map, the longest one, the
-  // nearest to the middle of the stretch.
-  const count = Math.max(1, Math.round((2 * W) / WAY_SPACING))
-  const vertical: Way[] = []
-  for (let k = 0; k < count; k++) {
-    const left = -W + (k * 2 * W) / count
-    const middle = left + W / count
-    const best = candidates
-      .filter(
-        (c) =>
-          c.at >= left &&
-          c.at < left + (2 * W) / count &&
-          vertical.every((v) => Math.abs(v.at - c.at) > 2 * CLEARANCE + 2),
-      )
-      .sort(
-        (a, b) =>
-          b.to - b.from - (a.to - a.from) ||
-          Math.abs(a.at - middle) - Math.abs(b.at - middle),
-      )[0]
-    if (best) vertical.push(best)
-  }
-  const roundabouts = vertical.flatMap((v) =>
-    horizontal
-      .filter(
-        (h) => h.at >= v.from && h.at <= v.to && h.from < v.at && h.to > v.at,
-      )
-      .map((h) => ({ x: v.at, z: h.at })),
-  )
-
-  // What a tile of the map becomes.
-  const paint = (x: number, z: number): 'road' | 'island' | null => {
-    // The nearest roundabout.
-    let [dx, dz] = [Infinity, Infinity]
-    for (const r of roundabouts) {
-      const [ax, az] = [Math.abs(x - r.x), Math.abs(z - r.z)]
-      if (Math.max(ax, az) < Math.max(dx, dz)) [dx, dz] = [ax, az]
-    }
-    if (dx < 1 && dz < 1) return 'island'
-    if (dx < ROUNDABOUT && dz < ROUNDABOUT && (dx < 2 || dz < 2)) return 'road'
-    const on = (w: Way, along: number, across: number) =>
-      Math.abs(across - w.at) < 1 && along > w.from && along < w.to
-    if (horizontal.some((h) => on(h, x, z))) return 'road'
-    if (vertical.some((v) => on(v, z, x))) return 'road'
-    return null
-  }
-  // Hills beside a road are levelled, for it to run on flat ground.
-  const beside = (x: number, z: number) =>
-    [-1, 0, 1].some((dx) => [-1, 0, 1].some((dz) => paint(x + dx, z + dz)))
-  // The pieces of a road that have a middle line: between its roundabouts, apart from them.
-  const pieces = (w: Way): [number, number][] => {
-    const stops = roundabouts
-      .map((r) =>
-        w.vertical ? (r.x === w.at ? r.z : null) : r.z === w.at ? r.x : null,
-      )
-      .filter((c): c is number => c !== null)
-      .sort((a, b) => a - b)
-    const bounds = [
-      w.from,
-      ...stops.flatMap((c) => [c - ROUNDABOUT, c + ROUNDABOUT]),
-      w.to,
-    ]
-    const list: [number, number][] = []
-    for (let k = 0; k < bounds.length; k += 2) {
-      if (bounds[k + 1] - bounds[k] >= 1) list.push([bounds[k], bounds[k + 1]])
-    }
-    return list
-  }
-  const ways = [...horizontal, ...vertical]
-  const lay = (n: Neighbourhood): Neighbourhood => {
-    const painted = new Set<string>()
-    const levelled = new Set<string>()
-    const at = (x: number, z: number) =>
-      `${Math.round(2 * x)},${Math.round(2 * z)}`
-    const tiles = n.layout.tiles.map((t): Tile => {
-      const kind = paint(n.x + t.x, n.z + t.z)
-      if (kind) {
-        painted.add(at(t.x, t.z))
-        return { ...t, kind, top: kind === 'island' ? ISLAND_TOP : ROAD_TOP }
-      }
-      if (t.kind === 'hill' && beside(n.x + t.x, n.z + t.z)) {
-        levelled.add(at(t.x, t.z))
-        return { ...t, kind: 'grass', top: GRASS_TOP }
-      }
-      return t
-    })
-    // Whether a point stands on a tile painted or levelled: tiles are on
-    // whole or half coordinates, the same for the whole plate.
-    const [own] = n.layout.tiles
-    const fx = own.x - Math.floor(own.x)
-    const fz = own.z - Math.floor(own.z)
-    const tileKey = (p: { x: number; z: number }) =>
-      at(Math.round(p.x - fx) + fx, Math.round(p.z - fz) + fz)
-    const gone = (p: { x: number; z: number }) =>
-      painted.has(tileKey(p)) || levelled.has(tileKey(p))
-    // A structure on a road goes, and its ground with it.
-    const crossed = (s: {
-      x: number
-      z: number
-      width: number
-      depth: number
-    }) =>
-      [...Array(s.width).keys()].some((di) =>
-        [...Array(s.depth).keys()].some((dj) =>
-          painted.has(
-            at(s.x - (s.width - 1) / 2 + di, s.z - (s.depth - 1) / 2 + dj),
-          ),
-        ),
-      )
-    // A road through a tennis club takes the whole club.
-    const club = (s: { kind: string }) =>
-      s.kind === 'tennis' || s.kind === 'clubhouse'
-    const clubCrossed = n.layout.structures.some((s) => club(s) && crossed(s))
-    const goes = (s: (typeof n.layout.structures)[number]) =>
-      crossed(s) || (clubCrossed && club(s))
-    const structures = n.layout.structures.filter((s) => !goes(s))
-    const removed = n.layout.structures.filter(goes)
-    const under = (t: Tile) =>
-      removed.some(
-        (s) =>
-          Math.abs(t.x - s.x) < s.width / 2 &&
-          Math.abs(t.z - s.z) < s.depth / 2,
-      )
-    const [hw, hd] = [n.layout.halfWidth, n.layout.halfDepth]
-    const roads: Road[] = ways.flatMap((w) => {
-      const [centre, along, halfAlong, halfAcross] = w.vertical
-        ? [n.x, n.z, hd, hw]
-        : [n.z, n.x, hw, hd]
-      if (Math.abs(w.at - centre) >= halfAcross) return []
-      return pieces(w).flatMap(([from, to]) => {
-        const xMin = Math.max(from, along - halfAlong) - along
-        const xMax = Math.min(to, along + halfAlong) - along
-        return xMax - xMin >= 1
-          ? [
-              {
-                z: w.at - centre,
-                amplitude: 0,
-                phase: 0,
-                xMin,
-                xMax,
-                ...(w.vertical ? { vertical: true } : {}),
-              },
-            ]
-          : []
-      })
-    })
-    const mine: Point[] = roundabouts
-      .filter(
-        (r) =>
-          r.x >= n.x - hw &&
-          r.x < n.x + hw &&
-          r.z >= n.z - hd &&
-          r.z < n.z + hd,
-      )
-      .map((r) => ({ x: r.x - n.x, y: ISLAND_TOP, z: r.z - n.z }))
-    return {
-      ...n,
-      layout: {
-        ...n.layout,
-        tiles: tiles.map((t) =>
-          !painted.has(at(t.x, t.z)) && under(t)
-            ? { ...t, kind: 'grass', top: GRASS_TOP }
-            : t,
-        ),
-        roads,
-        roundabouts: mine,
-        trees: n.layout.trees.filter((p) => !gone(p)),
-        flowers: n.layout.flowers.filter((p) => !gone(p)),
-        reeds: n.layout.reeds.filter((p) => !gone(p)),
-        rocks: n.layout.rocks.filter((p) => !gone(p)),
-        umbrellas: n.layout.umbrellas.filter((p) => !gone(p)),
-        structures,
-      },
-    }
-  }
-  return {
-    ...world,
-    neighbourhoods: world.neighbourhoods.map(lay),
-    wilds: world.wilds.map(lay),
-    ways,
-    roundabouts,
-  }
-}
-
-// Ground the sea of a side edge may cover.
-const SEA_GROUND = new Set<TileKind>([
-  'grass',
-  'hill',
-  'sand',
-  'snow',
-  'pond',
-  'ice',
-  'path',
-  'court',
-])
-// The chance of a sea along each of the left and right edges of the map, and
-// how deep (in tiles) it is at least, and by how much more at most.
-const SEA_CHANCE = 0.5
-const SEA_DEPTH = 4
-const SEA_EXTRA = 4
-// Tiles kept dry around the paved square of a monitored building.
-const SEA_KEEPOUT = 2
-
-// A sea may lie along the left or the right edge of the map, whatever the
-// biomes there: its shore is wavy, and it leaves roads, the railway, monitored
-// buildings and what is around them dry. What stood in it is gone, a tennis club whole.
-function carveSeas(world: World): World {
-  const seas = (['left', 'right'] as const).flatMap((side) =>
-    noise(`sea:${side}`) < SEA_CHANCE
-      ? [
-          {
-            side,
-            depth: SEA_DEPTH + SEA_EXTRA * noise(`sea:${side}:depth`),
-            phase: 6 * noise(`sea:${side}:phase`),
-          },
-        ]
-      : [],
-  )
-  if (seas.length === 0) return world
-  const W = world.halfWidth
-  const lots = world.neighbourhoods.flatMap((n) =>
-    n.layout.lots.map((l) => ({ ...l, x: l.x + n.x, z: l.z + n.z })),
-  )
-  const wet = (t: Tile, x: number, z: number): 'water' | 'shallow' | null => {
-    if (!SEA_GROUND.has(t.kind)) return null
-    if (
-      lots.some(
-        (l) =>
-          Math.max(Math.abs(x - l.x), Math.abs(z - l.z)) <
-          l.width / 2 + PLAZA_MARGIN + SEA_KEEPOUT,
-      )
-    ) {
-      return null
-    }
-    for (const { side, depth, phase } of seas) {
-      const from = side === 'left' ? x + W : W - x
-      const reach =
-        depth + 1.2 * Math.sin(z / 4.1 + phase) + 0.6 * Math.sin(z / 1.9)
-      if (from < reach) return from < reach - 1.5 ? 'water' : 'shallow'
-    }
-    return null
-  }
-  const at = (x: number, z: number) =>
-    `${Math.round(2 * x)},${Math.round(2 * z)}`
-  const carve = (n: Neighbourhood): Neighbourhood => {
-    const drowned = new Set<string>()
-    const tiles = n.layout.tiles.map((t): Tile => {
-      const kind = wet(t, n.x + t.x, n.z + t.z)
-      if (!kind) return t
-      drowned.add(at(t.x, t.z))
-      return { ...t, kind, top: kind === 'water' ? WATER_TOP : SHALLOW_TOP }
-    })
-    if (drowned.size === 0) return n
-    // Tiles are on whole or half coordinates, the same for the whole plate.
-    const [own] = n.layout.tiles
-    const fx = own.x - Math.floor(own.x)
-    const fz = own.z - Math.floor(own.z)
-    const under = (p: { x: number; z: number }) =>
-      drowned.has(at(Math.round(p.x - fx) + fx, Math.round(p.z - fz) + fz))
-    const covers = (s: {
-      x: number
-      z: number
-      width: number
-      depth: number
-    }) =>
-      [...Array(s.width).keys()].some((di) =>
-        [...Array(s.depth).keys()].some((dj) =>
-          drowned.has(
-            at(s.x - (s.width - 1) / 2 + di, s.z - (s.depth - 1) / 2 + dj),
-          ),
-        ),
-      )
-    const club = (s: { kind: string }) =>
-      s.kind === 'tennis' || s.kind === 'clubhouse'
-    const clubHit = n.layout.structures.some((s) => club(s) && covers(s))
-    const goes = (s: (typeof n.layout.structures)[number]) =>
-      covers(s) || (clubHit && club(s))
-    const removed = n.layout.structures.filter(goes)
-    const bare = (t: Tile) =>
-      removed.some(
-        (s) =>
-          Math.abs(t.x - s.x) < s.width / 2 &&
-          Math.abs(t.z - s.z) < s.depth / 2,
-      )
-    return {
-      ...n,
-      layout: {
-        ...n.layout,
-        tiles: tiles.map((t) =>
-          !drowned.has(at(t.x, t.z)) && bare(t)
-            ? { ...t, kind: 'grass', top: GRASS_TOP }
-            : t,
-        ),
-        trees: n.layout.trees.filter((p) => !under(p)),
-        flowers: n.layout.flowers.filter((p) => !under(p)),
-        reeds: n.layout.reeds.filter((p) => !under(p)),
-        rocks: n.layout.rocks.filter((p) => !under(p)),
-        umbrellas: n.layout.umbrellas.filter((p) => !under(p)),
-        structures: n.layout.structures.filter((s) => !goes(s)),
-      },
-    }
-  }
-  return {
-    ...world,
-    neighbourhoods: world.neighbourhoods.map(carve),
-    wilds: world.wilds.map(carve),
-  }
-}
-
-// Ground on which the biomes of two plates mix.
-const LAND = new Set<TileKind>(['grass', 'hill', 'sand', 'snow'])
-// How many tiles into a plate the biome of its neighbour reaches.
-const SEAM = 4
-const DIRECTIONS = [
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1],
-]
-
-// Where two plates meet, their biomes are dithered over a few tiles, the more
-// of the other one the closer to the edge, instead of changing at once. The
-// trees of a tile that changes grow as its new biome says.
-function blendSeams(world: World): World {
-  const plates = [...world.neighbourhoods, ...world.wilds]
-  const at = (x: number, z: number) =>
-    `${Math.round(2 * x)},${Math.round(2 * z)}`
-  const owner = new Map<string, { plate: number; tile: Tile }>()
-  plates.forEach((n, plate) => {
-    for (const tile of n.layout.tiles) {
-      owner.set(at(n.x + tile.x, n.z + tile.z), { plate, tile })
-    }
-  })
-  const blended = plates.map((n, plate) => {
-    const changed = new Map<string, Biome>()
-    const tiles = n.layout.tiles.map((tile) => {
-      if (!LAND.has(tile.kind)) return tile
-      const x = n.x + tile.x
-      const z = n.z + tile.z
-      // The nearest tile of another plate, straight along X or Z.
-      let nearest: { steps: number; biome: Biome } | null = null
-      for (const [dx, dz] of DIRECTIONS) {
-        for (let steps = 1; steps <= SEAM; steps++) {
-          const other = owner.get(at(x + dx * steps, z + dz * steps))
-          if (!other) break
-          if (other.plate === plate) continue
-          if (
-            LAND.has(other.tile.kind) &&
-            (!nearest || steps < nearest.steps)
-          ) {
-            nearest = { steps, biome: other.tile.biome }
-          }
-          break
-        }
-      }
-      if (!nearest || nearest.biome === tile.biome) return tile
-      const chance = 0.5 * (1 - (nearest.steps - 1) / SEAM)
-      if (noise(`seam:${at(x, z)}`) >= chance) return tile
-      changed.set(at(tile.x, tile.z), nearest.biome)
-      return { ...tile, biome: nearest.biome }
-    })
-    if (changed.size === 0) return n
-    // Tiles are on whole or half coordinates, the same for the whole plate.
-    const [first] = n.layout.tiles
-    const ox = first.x - Math.floor(first.x)
-    const oz = first.z - Math.floor(first.z)
-    const trees = n.layout.trees.map((tree) => {
-      const biome = changed.get(
-        at(Math.round(tree.x - ox) + ox, Math.round(tree.z - oz) + oz),
-      )
-      if (!biome) return tree
-      const kind = treeFor(biome, tree.kind, noise(`tree:${tree.x},${tree.z}`))
-      return {
-        ...tree,
-        kind,
-        height: tree.y + TREE_HEIGHTS[kind] * tree.scale,
-      }
-    })
-    return { ...n, layout: { ...n.layout, tiles, trees } }
-  })
-  return {
-    ...world,
-    neighbourhoods: blended.slice(0, world.neighbourhoods.length),
-    wilds: blended.slice(world.neighbourhoods.length),
-  }
-}
-
-// Wild ground never hides a building: its hills are levelled there, and its
-// trees, rocks and structures left out.
-function clearWilds(world: World): World {
-  const lots = world.neighbourhoods.flatMap((n) =>
-    n.layout.lots.map((l) => ({ ...l, x: l.x + n.x, z: l.z + n.z })),
-  )
-  const wilds = world.wilds.map((n) => {
-    const clear = (o: {
-      x: number
-      z: number
-      height: number
-      radius: number
-    }) => lots.every((lot) => !hides({ ...o, x: o.x + n.x, z: o.z + n.z }, lot))
-    const flattened = new Set<string>()
-    const at = (x: number, z: number) =>
-      `${Math.round(2 * x)},${Math.round(2 * z)}`
-    const tiles = n.layout.tiles.map((t) => {
-      if (t.kind !== 'hill' || clear({ ...t, height: t.top, radius: 0.7 })) {
-        return t
-      }
-      flattened.add(at(t.x, t.z))
-      return { ...t, kind: 'grass' as const, top: GRASS_TOP }
-    })
-    // Whether a point stands on a levelled hill.
-    const [first] = tiles
-    const ox = first.x - Math.floor(first.x)
-    const oz = first.z - Math.floor(first.z)
-    const levelled = (p: { x: number; z: number }) =>
-      flattened.has(at(Math.round(p.x - ox) + ox, Math.round(p.z - oz) + oz))
-    const structures = n.layout.structures.filter((s) =>
-      clear({ ...s, radius: Math.hypot(s.width, s.depth) / 2 }),
-    )
-    // The ground of a structure left out goes back to grass.
-    const gone = n.layout.structures.filter((s) => !structures.includes(s))
-    const under = (t: Tile) =>
-      gone.some(
-        (s) =>
-          Math.abs(t.x - s.x) < s.width / 2 &&
-          Math.abs(t.z - s.z) < s.depth / 2,
-      )
-    return {
-      ...n,
-      layout: {
-        ...n.layout,
-        tiles: tiles.map((t) =>
-          under(t) ? { ...t, kind: 'grass' as const, top: GRASS_TOP } : t,
-        ),
-        trees: n.layout.trees.filter(
-          (t) => !levelled(t) && clear({ ...t, radius: 0.45 * t.scale }),
-        ),
-        rocks: n.layout.rocks.filter((r) => !levelled(r)),
-        structures,
-      },
-    }
-  })
-  return { ...world, wilds }
-}
-
-// How much a physical host weighs in the size of its neighbourhood: the host
-// itself, its own services, its vm-hosts and the services on these.
-const HOST_SCORE = 20
-const SERVICE_SCORE = 5
-const VM_SCORE = 15
-const VM_SERVICE_SCORE = 6
-
-export function sizeScore(buildings: HostSpec[]): number {
-  const [host, ...vms] = buildings
-  return (
-    HOST_SCORE +
-    SERVICE_SCORE * (host?.services ?? 0) +
-    vms.reduce((sum, vm) => sum + VM_SCORE + VM_SERVICE_SCORE * vm.services, 0)
-  )
-}
-
-// Neighbourhoods are about this much wider than deep.
-const ASPECT = 1.3
-
-const odd = (n: number) =>
-  Math.ceil(n) % 2 === 0 ? Math.ceil(n) + 1 : Math.ceil(n)
-
-interface Size {
-  width: number
-  depth: number
-}
-
-// How much bigger than the one before it, at least, a neighbourhood is when
-// its score is higher.
-const GROWTH = 1.08
-
-// The size of every neighbourhood, in tiles: the bigger its score, the bigger
-// its area, and never too small for its buildings. Going up the scores, each
-// area is at least that of the previous score, a little more.
-function sizesOf(natural: Size[], scores: number[]): Size[] {
-  const sizes: Size[] = []
-  const ascending = scores
-    .map((_, i) => i)
-    .sort((a, b) => scores[a] - scores[b])
-  let previous = 0
-  let before = -Infinity
-  for (const i of ascending) {
-    const own = natural[i].width * natural[i].depth
-    // The same score, the same area, or the nearest the buildings allow.
-    const same = scores[i] === before
-    sizes[i] = fit(
-      natural[i],
-      Math.max(own, same ? previous : previous * GROWTH),
-    )
-    const area = sizes[i].width * sizes[i].depth
-    previous = same ? Math.max(previous, area) : area
-    before = scores[i]
-  }
-  return sizes
-}
-
-// The size of at least this area, odd on both sides and not smaller than
-// `min`, wide first or deep first, whichever overshoots the area the least.
-function fit(min: Size, area: number): Size {
-  const wide = odd(Math.max(min.width, Math.sqrt(area * ASPECT)))
-  const deep = odd(Math.max(min.depth, Math.sqrt(area / ASPECT)))
-  const options: Size[] = [
-    { width: wide, depth: odd(Math.max(min.depth, area / wide)) },
-    { width: odd(Math.max(min.width, area / deep)), depth: deep },
-  ]
-  return options.sort((p, q) => p.width * p.depth - q.width * q.depth)[0]
-}
-
-// Cuts the neighbourhoods, deepest first, into rows no wider than `limit`.
-function shelves(order: number[], sizes: Size[], limit: number): number[][] {
-  const rows: number[][] = []
-  let width = 0
-  for (const i of order) {
-    if (rows.length === 0 || width + sizes[i].width > limit) {
-      rows.push([])
-      width = 0
-    }
-    rows[rows.length - 1].push(i)
-    width += sizes[i].width
-  }
-  return rows
-}
-
-const rowWidth = (row: number[], sizes: Size[]) =>
-  row.reduce((sum, i) => sum + sizes[i].width, 0)
-const rowDepth = (row: number[], sizes: Size[]) =>
-  Math.max(...row.map((i) => sizes[i].depth))
-
-// The rows that make the map as square as possible, without wasting much
-// ground on joining tiles.
-function chooseRows(sizes: Size[]): number[][] {
-  const order = sizes
-    .map((_, i) => i)
-    .sort((a, b) => sizes[b].depth - sizes[a].depth || a - b)
-  const area = sizes.reduce((sum, s) => sum + s.width * s.depth, 0)
-  const widest = Math.max(...sizes.map((s) => s.width))
-  const total = sizes.reduce((sum, s) => sum + s.width, 0)
-  let best: number[][] = []
-  let bestScore = Infinity
-  for (let limit = widest; limit <= total; limit++) {
-    const rows = shelves(order, sizes, limit)
-    const width = Math.max(...rows.map((r) => rowWidth(r, sizes)))
-    const depth = rows.reduce((sum, r) => sum + rowDepth(r, sizes), 0)
-    const score =
-      Math.abs(Math.log(width / depth)) + (2 * (width * depth - area)) / area
-    if (score < bestScore) [best, bestScore] = [rows, score]
-  }
-  return best
 }
 
 export function worldLayout(specs: NeighbourhoodSpec[]): World {
@@ -808,12 +145,15 @@ export function worldLayout(specs: NeighbourhoodSpec[]): World {
   // its row, a joining tile fills the rest.
   const natural = items.map((hosts) => cityLayout(hosts))
   const sizes = sizesOf(
-    natural.map((l) => ({ width: 2 * l.halfWidth, depth: 2 * l.halfDepth })),
-    specs.map((s) => sizeScore(s.buildings)),
+    natural.map((cityLayout) => ({
+      width: 2 * cityLayout.halfWidth,
+      depth: 2 * cityLayout.halfDepth,
+    })),
+    specs.map((neighbourhoodSpec) => sizeScore(neighbourhoodSpec.buildings)),
   )
   // The tallest buildings stand at the back, where they hide the least.
   const tallest = (row: number[]) =>
-    Math.max(...row.flatMap((i) => natural[i].lots.map((l) => l.height)))
+    Math.max(...row.flatMap((i) => natural[i].lots.map((lot) => lot.height)))
   const rows = chooseRows(sizes).sort((a, b) => tallest(b) - tallest(a))
   const mapWidth = Math.max(...rows.map((r) => rowWidth(r, sizes)))
 
@@ -833,7 +173,9 @@ export function worldLayout(specs: NeighbourhoodSpec[]): World {
     }, 0)
     return back + height
   }, 0)
-  const mains = specs.map((s, i) => mainBiome(s.id, spots[i]))
+  const mains = specs.map((neighbourhoodSpec, i) =>
+    mainBiome(neighbourhoodSpec.id, spots[i]),
+  )
   const biomes: Biomes[] = []
   for (const row of rows) {
     row.forEach((i, c) => {
@@ -936,10 +278,10 @@ export function worldLayout(specs: NeighbourhoodSpec[]): World {
       back += height
     })
     // The middle of the map is the origin.
-    const move = (n: Neighbourhood): Neighbourhood => ({
-      ...n,
-      x: n.x - mapWidth / 2,
-      z: n.z - back / 2,
+    const move = (neighbourhood: Neighbourhood): Neighbourhood => ({
+      ...neighbourhood,
+      x: neighbourhood.x - mapWidth / 2,
+      z: neighbourhood.z - back / 2,
     })
     const plates = specs.map((_, i) => move(neighbourhoods.get(i)!))
     const joins = wilds.map(move)
@@ -948,10 +290,16 @@ export function worldLayout(specs: NeighbourhoodSpec[]): World {
       neighbourhoods: plates,
       wilds: joins,
       halfWidth: Math.max(
-        ...all.map((n) => Math.abs(n.x) + n.layout.halfWidth),
+        ...all.map(
+          (neighbourhood) =>
+            Math.abs(neighbourhood.x) + neighbourhood.layout.halfWidth,
+        ),
       ),
       halfDepth: Math.max(
-        ...all.map((n) => Math.abs(n.z) + n.layout.halfDepth),
+        ...all.map(
+          (neighbourhood) =>
+            Math.abs(neighbourhood.z) + neighbourhood.layout.halfDepth,
+        ),
       ),
       ways: [],
       roundabouts: [],
@@ -961,12 +309,12 @@ export function worldLayout(specs: NeighbourhoodSpec[]): World {
   const rowOf = new Map<number, number>()
   rows.forEach((row, r) => row.forEach((i) => rowOf.set(i, r)))
   const lotsOf = (world: World): Placed[] =>
-    world.neighbourhoods.flatMap((n, i) =>
-      n.layout.lots.map((l) => ({
-        x: l.x + n.x,
-        z: l.z + n.z,
-        height: l.height,
-        width: l.width,
+    world.neighbourhoods.flatMap((neighbourhood, i) =>
+      neighbourhood.layout.lots.map((lot) => ({
+        x: lot.x + neighbourhood.x,
+        z: lot.z + neighbourhood.z,
+        height: lot.height,
+        width: lot.width,
         row: rowOf.get(i)!,
       })),
     )
@@ -1039,11 +387,11 @@ export function worldFrame(world: Ground, top: number): Frame {
   // building. An empty map shows a plate of the smallest size.
   const all = [...world.neighbourhoods, ...world.wilds]
   const plates = all.length
-    ? all.map((n) => ({
-        x: n.x,
-        z: n.z,
-        halfWidth: n.layout.halfWidth,
-        halfDepth: n.layout.halfDepth,
+    ? all.map((neighbourhood) => ({
+        x: neighbourhood.x,
+        z: neighbourhood.z,
+        halfWidth: neighbourhood.layout.halfWidth,
+        halfDepth: neighbourhood.layout.halfDepth,
       }))
     : [{ x: 0, z: 0, halfWidth: 14, halfDepth: 14 }]
   const points = plates.flatMap((p) =>

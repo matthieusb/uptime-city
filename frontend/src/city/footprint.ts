@@ -74,7 +74,7 @@ export function groundOf(
   world: World,
   plate: Neighbourhood,
   edge: number,
-  blocked: (s: Structure) => boolean = () => false,
+  blocked: (structure: Structure) => boolean = () => false,
 ): Ground {
   const { layout } = plate
   const minX = Math.min(...layout.tiles.map((t) => t.x))
@@ -111,10 +111,13 @@ export function groundOf(
     }
   }
   // Monitored buildings and decoration lots, with their square and some room around.
-  for (const n of world.neighbourhoods) {
-    for (const l of n.layout.lots) {
-      const half = l.width / 2 + PLAZA_MARGIN + 1.5
-      const [cx, cz] = [n.x + l.x - plate.x, n.z + l.z - plate.z]
+  for (const neighbourhood of world.neighbourhoods) {
+    for (const lot of neighbourhood.layout.lots) {
+      const half = lot.width / 2 + PLAZA_MARGIN + 1.5
+      const [cx, cz] = [
+        neighbourhood.x + lot.x - plate.x,
+        neighbourhood.z + lot.z - plate.z,
+      ]
       for (
         let ix = Math.floor(cx - half - minX);
         ix <= Math.ceil(cx + half - minX);
@@ -141,12 +144,16 @@ export function groundOf(
     const [ix, iz] = [Math.round(tree.x - minX), Math.round(tree.z - minZ)]
     if (inside(ix, iz)) cost[iz * nx + ix] += 0.3
   }
-  for (const s of layout.structures) {
-    const stays = blocked(s)
-    for (let di = 0; di < s.width; di++) {
-      for (let dj = 0; dj < s.depth; dj++) {
-        const ix = Math.round(s.x - (s.width - 1) / 2 + di - minX)
-        const iz = Math.round(s.z - (s.depth - 1) / 2 + dj - minZ)
+  for (const structure of layout.structures) {
+    const stays = blocked(structure)
+    for (let di = 0; di < structure.width; di++) {
+      for (let dj = 0; dj < structure.depth; dj++) {
+        const ix = Math.round(
+          structure.x - (structure.width - 1) / 2 + di - minX,
+        )
+        const iz = Math.round(
+          structure.z - (structure.depth - 1) / 2 + dj - minZ,
+        )
         if (!inside(ix, iz)) continue
         if (stays) bad[iz * nx + ix] = 1
         else cost[iz * nx + ix] += 4
@@ -158,11 +165,11 @@ export function groundOf(
     grid: { minX, minZ, nx, nz },
     badIn: rectSums(nx, nz, bad),
     costIn: rectSums(nx, nz, cost),
-    lots: world.neighbourhoods.flatMap((n) =>
-      n.layout.lots.map((l) => ({
-        x: n.x + l.x,
-        z: n.z + l.z,
-        width: l.width,
+    lots: world.neighbourhoods.flatMap((neighbourhood) =>
+      neighbourhood.layout.lots.map((lot) => ({
+        x: neighbourhood.x + lot.x,
+        z: neighbourhood.z + lot.z,
+        width: lot.width,
       })),
     ),
   }
@@ -196,23 +203,29 @@ export function level(t: Tile): Tile {
 // and the ground of whatever went elsewhere goes back to grass.
 export function clearFootprint(
   layout: CityLayout,
-  c: Centre,
+  centre: Centre,
   paint: (t: Tile) => Tile,
   built: Structure,
 ): CityLayout {
   const within = (x: number, z: number, margin = 0) =>
-    Math.abs(x - c.x) < c.w / 2 + margin && Math.abs(z - c.z) < c.d / 2 + margin
-  const hit = (s: Structure) =>
-    Math.abs(s.x - c.x) < (s.width + c.w) / 2 &&
-    Math.abs(s.z - c.z) < (s.depth + c.d) / 2
-  const club = (s: Structure) => s.kind === 'tennis' || s.kind === 'clubhouse'
-  const clubHit = layout.structures.some((s) => club(s) && hit(s))
-  const goes = (s: Structure) => hit(s) || (clubHit && club(s))
+    Math.abs(x - centre.x) < centre.w / 2 + margin &&
+    Math.abs(z - centre.z) < centre.d / 2 + margin
+  const hit = (structure: Structure) =>
+    Math.abs(structure.x - centre.x) < (structure.width + centre.w) / 2 &&
+    Math.abs(structure.z - centre.z) < (structure.depth + centre.d) / 2
+  const club = (structure: Structure) =>
+    structure.kind === 'tennis' || structure.kind === 'clubhouse'
+  const clubHit = layout.structures.some(
+    (structure) => club(structure) && hit(structure),
+  )
+  const goes = (structure: Structure) =>
+    hit(structure) || (clubHit && club(structure))
   const removed = layout.structures.filter(goes)
   const under = (t: Tile) =>
     removed.some(
-      (s) =>
-        Math.abs(t.x - s.x) < s.width / 2 && Math.abs(t.z - s.z) < s.depth / 2,
+      (structure) =>
+        Math.abs(t.x - structure.x) < structure.width / 2 &&
+        Math.abs(t.z - structure.z) < structure.depth / 2,
     )
   const tiles = layout.tiles.map((t): Tile => {
     if (within(t.x, t.z)) return paint(t)
@@ -227,6 +240,9 @@ export function clearFootprint(
     reeds: layout.reeds.filter(free),
     rocks: layout.rocks.filter(free),
     umbrellas: layout.umbrellas.filter(free),
-    structures: [...layout.structures.filter((s) => !goes(s)), built],
+    structures: [
+      ...layout.structures.filter((structure) => !goes(structure)),
+      built,
+    ],
   }
 }

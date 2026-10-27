@@ -36,9 +36,9 @@ function InstancedBoxes({ boxes, color }: { boxes: Box[]; color: string }) {
   const mesh = useRef<InstancedMesh>(null)
   useLayoutEffect(() => {
     const dummy = new Object3D()
-    boxes.forEach((b, i) => {
-      dummy.position.set(b.x, b.y, b.z)
-      dummy.scale.set(b.sx, b.sy, b.sz)
+    boxes.forEach((box, i) => {
+      dummy.position.set(box.x, box.y, box.z)
+      dummy.scale.set(box.sx, box.sy, box.sz)
       dummy.updateMatrix()
       mesh.current?.setMatrixAt(i, dummy.matrix)
     })
@@ -405,55 +405,55 @@ function Props({ layout }: { layout: CityLayout }) {
         })
       }
     }
-    for (const f of layout.flowers) {
+    for (const flower of layout.flowers) {
       addBox(groups, '#2f7d32', {
-        x: f.x,
-        y: f.y + 0.08,
-        z: f.z,
+        x: flower.x,
+        y: flower.y + 0.08,
+        z: flower.z,
         sx: 0.06,
         sy: 0.16,
         sz: 0.06,
       })
-      addBox(groups, f.color, {
-        x: f.x,
-        y: f.y + 0.2,
-        z: f.z,
+      addBox(groups, flower.color, {
+        x: flower.x,
+        y: flower.y + 0.2,
+        z: flower.z,
         sx: 0.18,
         sy: 0.1,
         sz: 0.18,
       })
     }
-    for (const r of layout.reeds) {
+    for (const point of layout.reeds) {
       addBox(groups, '#4f8a3a', {
-        x: r.x,
-        y: r.y + 0.25,
-        z: r.z,
+        x: point.x,
+        y: point.y + 0.25,
+        z: point.z,
         sx: 0.06,
         sy: 0.5,
         sz: 0.06,
       })
       addBox(groups, '#6b4226', {
-        x: r.x,
-        y: r.y + 0.5,
-        z: r.z,
+        x: point.x,
+        y: point.y + 0.5,
+        z: point.z,
         sx: 0.09,
         sy: 0.14,
         sz: 0.09,
       })
     }
-    for (const r of layout.rocks) {
+    for (const point of layout.rocks) {
       addBox(groups, '#8d8d86', {
-        x: r.x,
-        y: r.y + 0.17,
-        z: r.z,
+        x: point.x,
+        y: point.y + 0.17,
+        z: point.z,
         sx: 0.5,
         sy: 0.35,
         sz: 0.4,
       })
       addBox(groups, '#a3a39b', {
-        x: r.x + 0.2,
-        y: r.y + 0.1,
-        z: r.z + 0.2,
+        x: point.x + 0.2,
+        y: point.y + 0.1,
+        z: point.z + 0.2,
         sx: 0.25,
         sy: 0.2,
         sz: 0.25,
@@ -485,20 +485,20 @@ function Props({ layout }: { layout: CityLayout }) {
         sz: 0.5,
       })
     }
-    for (const p of layout.pier) {
+    for (const point of layout.pier) {
       addBox(groups, '#a0703c', {
-        x: p.x,
-        y: p.y,
-        z: p.z,
+        x: point.x,
+        y: point.y,
+        z: point.z,
         sx: 1,
         sy: 0.08,
         sz: 0.95,
       })
       for (const dx of [-0.42, 0.42]) {
         addBox(groups, '#5b3a1e', {
-          x: p.x + dx,
-          y: p.y - 0.3,
-          z: p.z,
+          x: point.x + dx,
+          y: point.y - 0.3,
+          z: point.z,
           sx: 0.12,
           sy: 0.6,
           sz: 0.12,
@@ -621,8 +621,8 @@ function Decor({ lots }: { lots: Lot[] }) {
 const AWNINGS = ['#e63946', '#219ebc', '#ffb703', '#06d6a0', '#8338ec']
 
 // Boxes of a small structure of a city or a beach, around its middle.
-function structureBoxes(s: Structure, groups: Map<string, Box[]>) {
-  const salt = `${s.kind}:${s.x},${s.z}`
+function structureBoxes(structure: Structure, groups: Map<string, Box[]>) {
+  const salt = `${structure.kind}:${structure.x},${structure.z}`
   const box = (
     color: string,
     dx: number,
@@ -632,11 +632,18 @@ function structureBoxes(s: Structure, groups: Map<string, Box[]>) {
     sy: number,
     sz: number,
   ) =>
-    addBox(groups, color, { x: s.x + dx, y: s.y + y, z: s.z + dz, sx, sy, sz })
+    addBox(groups, color, {
+      x: structure.x + dx,
+      y: structure.y + y,
+      z: structure.z + dz,
+      sx,
+      sy,
+      sz,
+    })
   const pick = <T,>(list: T[], n = 0) =>
     list[hash(`${salt}:${n}`) % list.length]
 
-  switch (s.kind) {
+  switch (structure.kind) {
     case 'house':
       box(pick(PASTELS), 0, 0.45, 0, 1.3, 0.9, 1.3)
       box(
@@ -726,10 +733,10 @@ function structureBoxes(s: Structure, groups: Map<string, Box[]>) {
       break
     }
     case 'airport':
-      airportBoxes(s, (color, b) => addBox(groups, color, b))
+      airportBoxes(structure, (color, boxOut) => addBox(groups, color, boxOut))
       break
     case 'monument':
-      monumentBoxes(s, (color, b) => addBox(groups, color, b))
+      monumentBoxes(structure, (color, boxOut) => addBox(groups, color, boxOut))
       break
     case 'kiosk': {
       const awning = pick(AWNINGS)
@@ -765,7 +772,7 @@ function structureBoxes(s: Structure, groups: Map<string, Box[]>) {
 function Structures({ structures }: { structures: Structure[] }) {
   const boxes = useMemo(() => {
     const groups = new Map<string, Box[]>()
-    for (const s of structures) structureBoxes(s, groups)
+    for (const structure of structures) structureBoxes(structure, groups)
     return groups
   }, [structures])
   return <ColoredBoxes boxes={boxes} />

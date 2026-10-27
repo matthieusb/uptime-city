@@ -134,7 +134,7 @@ describe('graphModel', () => {
     )
     expect(model.line).toEqual([])
     expect(model.outages).toHaveLength(2)
-    expect(model.points.every((p) => p.y === null)).toBe(true)
+    expect(model.points.every((graphPoint) => graphPoint.y === null)).toBe(true)
     expect(model.yTicks.at(-1)?.label).toBe('100 ms')
   })
 })

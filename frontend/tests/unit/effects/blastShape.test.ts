@@ -69,24 +69,26 @@ describe('fireFlames', () => {
   })
 
   it('spreads them over the tile, none outside it', () => {
-    for (const f of flames) {
-      expect(Math.abs(f.x)).toBeLessThanOrEqual(half.w)
-      expect(Math.abs(f.z)).toBeLessThanOrEqual(half.d)
+    for (const flame of flames) {
+      expect(Math.abs(flame.x)).toBeLessThanOrEqual(half.w)
+      expect(Math.abs(flame.z)).toBeLessThanOrEqual(half.d)
     }
-    expect(new Set(flames.map((f) => Math.round(f.x))).size).toBeGreaterThan(5)
+    expect(
+      new Set(flames.map((flame) => Math.round(flame.x))).size,
+    ).toBeGreaterThan(5)
   })
 
   it('sets each one alight after the wave has reached it', () => {
-    for (const f of flames) {
-      const arrives = (Math.hypot(f.x, f.z) / reach) * BLAST_S
-      expect(f.ignite).toBeGreaterThanOrEqual(arrives)
-      expect(f.ignite).toBeLessThanOrEqual(BLAST_S + 0.5)
+    for (const flame of flames) {
+      const arrives = (Math.hypot(flame.x, flame.z) / reach) * BLAST_S
+      expect(flame.ignite).toBeGreaterThanOrEqual(arrives)
+      expect(flame.ignite).toBeLessThanOrEqual(BLAST_S + 0.5)
     }
   })
 
   it('lets the ones nearest the impact catch first', () => {
     const byDistance = [...flames].sort(
-      (a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z),
+      (flame, b) => Math.hypot(flame.x, flame.z) - Math.hypot(b.x, b.z),
     )
     expect(byDistance[0].ignite).toBeLessThan(byDistance.at(-1)!.ignite)
   })

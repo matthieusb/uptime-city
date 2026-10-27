@@ -125,14 +125,22 @@ export function parking(side: number, width: number): Parking {
 // Where a point of the truck, given in its own frame (+X ahead, +Y up), is relative to the middle
 // of the building, once it has parked.
 export function atTruck(
-  p: Parking,
+  parking: Parking,
   local: { x: number; y: number; z: number },
   offset = 0,
 ): { x: number; y: number; z: number } {
   return {
-    x: p.x + p.dx * offset + local.x * p.dx - local.z * p.dz,
+    x:
+      parking.x +
+      parking.dx * offset +
+      local.x * parking.dx -
+      local.z * parking.dz,
     y: local.y,
-    z: p.z + p.dz * offset + local.x * p.dz + local.z * p.dx,
+    z:
+      parking.z +
+      parking.dz * offset +
+      local.x * parking.dz +
+      local.z * parking.dx,
   }
 }
 

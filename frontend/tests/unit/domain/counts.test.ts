@@ -107,28 +107,32 @@ describe('whole map', () => {
 
   it('lists the services with a status, with their host, vm-hosts included', () => {
     expect(
-      servicesWithStatus(groups, history, 'up').map((s) => [
-        s.name,
-        s.hostName,
+      servicesWithStatus(groups, history, 'up').map((statusService) => [
+        statusService.name,
+        statusService.hostName,
       ]),
     ).toEqual([
       ['a', 'srv'],
       ['c', 'vm'],
     ])
     expect(
-      servicesWithStatus(groups, history, 'down').map((s) => s.id),
+      servicesWithStatus(groups, history, 'down').map(
+        (statusService) => statusService.id,
+      ),
     ).toEqual(['b'])
     expect(
-      servicesWithStatus(groups, history, 'unknown').map((s) => s.status),
+      servicesWithStatus(groups, history, 'unknown').map(
+        (statusService) => statusService.status,
+      ),
     ).toEqual(['unknown'])
   })
 
   it('tells the building and the tile of each service, for a jump to it', () => {
     expect(
-      servicesWithStatus(groups, history, 'up').map((s) => [
-        s.id,
-        s.buildingId,
-        s.plateId,
+      servicesWithStatus(groups, history, 'up').map((statusService) => [
+        statusService.id,
+        statusService.buildingId,
+        statusService.plateId,
       ]),
     ).toEqual([
       ['a', 'srv', 'srv'],
@@ -140,7 +144,9 @@ describe('whole map', () => {
     const skipped = new Map(history).set('b', [result(false, true)])
     expect(servicesWithStatus(groups, skipped, 'down')).toEqual([])
     expect(
-      servicesWithStatus(groups, skipped, 'unknown').map((s) => s.id),
+      servicesWithStatus(groups, skipped, 'unknown').map(
+        (statusService) => statusService.id,
+      ),
     ).toEqual(['b', 'd'])
   })
 
@@ -159,9 +165,10 @@ describe('whole map', () => {
       ),
     )
 
-    expect(servicesWithStatus([two[0]], ups, 'up').map((s) => s.id)).toEqual([
-      'a',
-      'c',
-    ])
+    expect(
+      servicesWithStatus([two[0]], ups, 'up').map(
+        (statusService) => statusService.id,
+      ),
+    ).toEqual(['a', 'c'])
   })
 })

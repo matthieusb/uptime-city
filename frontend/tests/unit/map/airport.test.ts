@@ -39,10 +39,10 @@ const medium = [spec('a', 4, 4), spec('b', 3), spec('c'), spec('d', 5, 5, 5)]
 
 const world = worldLayout(homelab)
 const biggestOf = (w: typeof world) =>
-  w.neighbourhoods.reduce((best, n) =>
-    n.layout.halfWidth * n.layout.halfDepth >
+  w.neighbourhoods.reduce((best, neighbourhood) =>
+    neighbourhood.layout.halfWidth * neighbourhood.layout.halfDepth >
     best.layout.halfWidth * best.layout.halfDepth
-      ? n
+      ? neighbourhood
       : best,
   )
 
@@ -73,8 +73,10 @@ describe('the airport of a world', () => {
     expect(airport).not.toBeNull()
     expect(airport.plate.id).toBe(biggestOf(world).id)
     expect(
-      world.neighbourhoods.filter((n) =>
-        n.layout.structures.some((s) => s.kind === 'airport'),
+      world.neighbourhoods.filter((neighbourhood) =>
+        neighbourhood.layout.structures.some(
+          (structure) => structure.kind === 'airport',
+        ),
       ),
     ).toHaveLength(1)
   })
@@ -184,11 +186,11 @@ describe('the airport of a world', () => {
 
   it('hides no building on screen', () => {
     const { plate, structure: s, layout, turn } = airport
-    const lots = world.neighbourhoods.flatMap((n) =>
-      n.layout.lots.map((l) => ({
-        x: n.x + l.x,
-        z: n.z + l.z,
-        width: l.width,
+    const lots = world.neighbourhoods.flatMap((neighbourhood) =>
+      neighbourhood.layout.lots.map((lot) => ({
+        x: neighbourhood.x + lot.x,
+        z: neighbourhood.z + lot.z,
+        width: lot.width,
       })),
     )
     for (const o of solids(layout)) {
@@ -200,10 +202,13 @@ describe('the airport of a world', () => {
 
   it('leaves every monitored building as it was', () => {
     const ids = (w: typeof world) =>
-      w.neighbourhoods.flatMap((n) => n.layout.lots.map((l) => l.id))
+      w.neighbourhoods.flatMap((neighbourhood) =>
+        neighbourhood.layout.lots.map((lot) => lot.id),
+      )
     expect(ids(world).length).toBeGreaterThan(0)
     for (const host of homelab) {
-      for (const b of host.buildings) expect(ids(world)).toContain(b.id)
+      for (const hostSpec of host.buildings)
+        expect(ids(world)).toContain(hostSpec.id)
     }
   })
 
@@ -234,16 +239,16 @@ describe('the drawing', () => {
         const [w, d] = turn % 2 === 0 ? [l.width, l.depth] : [l.depth, l.width]
         const s = { x: 3, y: 0.09, z: -5, width: w, depth: d, turn }
         const boxes: BoxOut[] = []
-        airportBoxes(s, (_, b) => boxes.push(b))
+        airportBoxes(s, (_, boxOut) => boxes.push(boxOut))
         expect(boxes.length).toBeGreaterThan(20)
-        for (const b of boxes) {
-          expect(Math.abs(b.x - s.x) + b.sx / 2).toBeLessThanOrEqual(
+        for (const boxOut of boxes) {
+          expect(Math.abs(boxOut.x - s.x) + boxOut.sx / 2).toBeLessThanOrEqual(
             w / 2 + 1e-6,
           )
-          expect(Math.abs(b.z - s.z) + b.sz / 2).toBeLessThanOrEqual(
+          expect(Math.abs(boxOut.z - s.z) + boxOut.sz / 2).toBeLessThanOrEqual(
             d / 2 + 1e-6,
           )
-          expect(b.y - b.sy / 2).toBeGreaterThanOrEqual(s.y - 1e-6)
+          expect(boxOut.y - boxOut.sy / 2).toBeGreaterThanOrEqual(s.y - 1e-6)
         }
       }
     }

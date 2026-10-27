@@ -120,7 +120,7 @@ export interface MonumentSpec {
 }
 
 const topOf = (kind: MonumentKind) =>
-  Math.max(...shapeOf(kind).map((p) => p.y + p.sy / 2))
+  Math.max(...shapeOf(kind).map((part) => part.y + part.sy / 2))
 
 export const MONUMENTS = Object.fromEntries(
   (Object.keys(LIST) as MonumentKind[]).map((kind) => {
@@ -139,7 +139,11 @@ const KINDS = Object.keys(MONUMENTS) as MonumentKind[]
 
 // The biggest size of monument a tile of this area (full width times full depth) may hold.
 export function sizeClass(area: number): MonumentSize {
-  return [...SIZES].reverse().find((s) => area >= FROM_AREA[s]) ?? 'small'
+  return (
+    [...SIZES]
+      .reverse()
+      .find((monumentSize) => area >= FROM_AREA[monumentSize]) ?? 'small'
+  )
 }
 
 // How likely a tile of this area is to have a monument, when the biggest tile has this one: 1 for
@@ -150,7 +154,8 @@ export function monumentChance(area: number, biggest: number): number {
   return MIN_CHANCE + (1 - MIN_CHANCE) * share
 }
 
-const areaOf = (n: Neighbourhood) => 4 * n.layout.halfWidth * n.layout.halfDepth
+const areaOf = (neighbourhood: Neighbourhood) =>
+  4 * neighbourhood.layout.halfWidth * neighbourhood.layout.halfDepth
 
 // What rises from the ground and could hide a building behind it, by blocks of 2 tiles, in the
 // frame of the monument: the height of the tallest box over the block.
@@ -179,12 +184,12 @@ export function solids(kind: MonumentKind): Solid[] {
       const x = -footprint / 2 + SOLID_STEP * (i + 0.5)
       const z = -footprint / 2 + SOLID_STEP * (j + 0.5)
       let height = 0
-      for (const p of parts) {
+      for (const part of parts) {
         if (
-          Math.abs(p.x - x) < p.sx / 2 + SOLID_STEP / 2 &&
-          Math.abs(p.z - z) < p.sz / 2 + SOLID_STEP / 2
+          Math.abs(part.x - x) < part.sx / 2 + SOLID_STEP / 2 &&
+          Math.abs(part.z - z) < part.sz / 2 + SOLID_STEP / 2
         ) {
-          height = Math.max(height, p.y + p.sy / 2)
+          height = Math.max(height, part.y + part.sy / 2)
         }
       }
       if (height > SOLID_FROM) {
@@ -204,29 +209,38 @@ const unit = (text: string) => hash(text) / 4294967296
 export function placeMonuments(world: World): World {
   const all = [...world.neighbourhoods, ...world.wilds]
   if (all.length === 0) return world
-  const biggest = all.reduce((best, n) => (areaOf(n) > areaOf(best) ? n : best))
+  const biggest = all.reduce((best, neighbourhood) =>
+    areaOf(neighbourhood) > areaOf(best) ? neighbourhood : best,
+  )
   const top = areaOf(biggest)
   // The bigger tiles choose first, so that they get the bigger monuments.
   const order = [...all].sort(
-    (a, b) => areaOf(b) - areaOf(a) || (a.id < b.id ? -1 : 1),
+    (neighbourhood, b) =>
+      areaOf(b) - areaOf(neighbourhood) || (neighbourhood.id < b.id ? -1 : 1),
   )
   const used = new Set<MonumentKind>()
   const laid = new Map<Neighbourhood, Neighbourhood>()
-  for (const n of order) {
-    const sure = n === biggest
-    let plate = n
-    if (sure || unit(`monument:${n.id}`) < monumentChance(areaOf(n), top)) {
+  for (const neighbourhood of order) {
+    const sure = neighbourhood === biggest
+    let plate = neighbourhood
+    if (
+      sure ||
+      unit(`monument:${neighbourhood.id}`) <
+        monumentChance(areaOf(neighbourhood), top)
+    ) {
       plate = withMonument(world, plate, used)
     }
-    if (sure && unit(`monument:second:${n.id}`) < SECOND_CHANCE) {
+    if (sure && unit(`monument:second:${neighbourhood.id}`) < SECOND_CHANCE) {
       plate = withMonument(world, plate, used)
     }
-    laid.set(n, plate)
+    laid.set(neighbourhood, plate)
   }
   return {
     ...world,
-    neighbourhoods: world.neighbourhoods.map((n) => laid.get(n)!),
-    wilds: world.wilds.map((n) => laid.get(n)!),
+    neighbourhoods: world.neighbourhoods.map((neighbourhood) =>
+      laid.get(neighbourhood)!,
+    ),
+    wilds: world.wilds.map((neighbourhood) => laid.get(neighbourhood)!),
   }
 }
 
@@ -242,7 +256,8 @@ function withMonument(
     world,
     plate,
     0,
-    (s) => s.kind === 'airport' || s.kind === 'monument',
+    (structure) =>
+      structure.kind === 'airport' || structure.kind === 'monument',
   )
   const present = new Set(plate.layout.tiles.map((t) => t.biome))
   for (let k = SIZES.indexOf(sizeClass(areaOf(plate))); k >= 0; k--) {
@@ -250,10 +265,11 @@ function withMonument(
       (kind) =>
         !used.has(kind) &&
         MONUMENTS[kind].size === SIZES[k] &&
-        MONUMENTS[kind].biomes.some((b) => present.has(b)),
+        MONUMENTS[kind].biomes.some((biome) => present.has(biome)),
     ).sort(
-      (a, b) =>
-        hash(`monument:${plate.id}:${a}`) - hash(`monument:${plate.id}:${b}`),
+      (monumentKind, b) =>
+        hash(`monument:${plate.id}:${monumentKind}`) -
+        hash(`monument:${plate.id}:${b}`),
     )
     for (const kind of kinds) {
       const spot = search(plate, ground, kind)
@@ -302,12 +318,12 @@ function search(
   const parts = solids(kind)
   return (
     spots.find((s) => {
-      const c = centreOf(grid, s.ix, s.iz, f, f)
-      return parts.every((o) => {
+      const centre = centreOf(grid, s.ix, s.iz, f, f)
+      return parts.every((solid) => {
         const object = {
-          ...o,
-          x: plate.x + c.x + o.x,
-          z: plate.z + c.z + o.z,
+          ...solid,
+          x: plate.x + centre.x + solid.x,
+          z: plate.z + centre.z + solid.z,
         }
         return lots.every((lot) => !hides(object, lot))
       })
@@ -328,18 +344,18 @@ function build(
     nz: 0,
   }
   const { footprint: f, height } = MONUMENTS[kind]
-  const c = centreOf(grid, spot.ix, spot.iz, f, f)
+  const centre = centreOf(grid, spot.ix, spot.iz, f, f)
   const monument: Structure = {
     kind: 'monument',
     monument: kind,
-    x: c.x,
+    x: centre.x,
     y: 0,
-    z: c.z,
+    z: centre.z,
     width: f,
     depth: f,
     height,
   }
-  return { ...plate, layout: clearFootprint(layout, c, level, monument) }
+  return { ...plate, layout: clearFootprint(layout, centre, level, monument) }
 }
 
 // The monuments of a world, with the plate each one stands on.
@@ -352,7 +368,9 @@ export interface Monument {
 export function findMonuments(world: World): Monument[] {
   return [...world.neighbourhoods, ...world.wilds].flatMap((plate) =>
     plate.layout.structures
-      .filter((s) => s.kind === 'monument' && s.monument)
+      .filter(
+        (structure) => structure.kind === 'monument' && structure.monument,
+      )
       .map((structure) => ({ plate, structure, kind: structure.monument! })),
   )
 }
@@ -372,14 +390,14 @@ export function monumentBoxes(
   emit: (color: string, box: BoxOut) => void,
 ) {
   if (!s.monument) return
-  for (const p of shapeOf(s.monument)) {
-    emit(p.color, {
-      x: s.x + p.x,
-      y: s.y + p.y,
-      z: s.z + p.z,
-      sx: p.sx,
-      sy: p.sy,
-      sz: p.sz,
+  for (const part of shapeOf(s.monument)) {
+    emit(part.color, {
+      x: s.x + part.x,
+      y: s.y + part.y,
+      z: s.z + part.z,
+      sx: part.sx,
+      sy: part.sy,
+      sz: part.sz,
     })
   }
 }

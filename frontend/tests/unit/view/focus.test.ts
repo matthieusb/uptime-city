@@ -56,24 +56,28 @@ describe('focusFor', () => {
     'puts %s in front of the backdrop and every other one behind it',
     (id) => {
       const { lift, backdropDepth } = focusFor(world, id, TOP, CENTER)!
-      const plate = world.neighbourhoods.find((n) => n.id === id)!
+      const plate = world.neighbourhoods.find(
+        (neighbourhood) => neighbourhood.id === id,
+      )!
       // Depth of a point once scaled around the middle of the screen.
       const scaled = (scale: number, x: number, y: number, z: number) =>
         depth(...CENTER) + scale * (depth(x, y, z) - depth(...CENTER))
-      const corners = (n: typeof plate, y: number, scale: number) =>
+      const corners = (neighbourhood: typeof plate, y: number, scale: number) =>
         [-1, 1].flatMap((sx) =>
           [-1, 1].map((sz) =>
             scaled(
               scale,
-              n.x + sx * n.layout.halfWidth,
+              neighbourhood.x + sx * neighbourhood.layout.halfWidth,
               y,
-              n.z + sz * n.layout.halfDepth,
+              neighbourhood.z + sz * neighbourhood.layout.halfDepth,
             ),
           ),
         )
       const lifted = Math.min(...corners(plate, 0, NEAR)) + Math.hypot(...lift)
       expect(lifted).toBeGreaterThan(backdropDepth)
-      for (const other of world.neighbourhoods.filter((n) => n !== plate)) {
+      for (const other of world.neighbourhoods.filter(
+        (neighbourhood) => neighbourhood !== plate,
+      )) {
         expect(Math.max(...corners(other, TOP, FAR))).toBeLessThan(
           backdropDepth,
         )
@@ -108,7 +112,7 @@ describe('plateFrame centering', () => {
     'puts the middle of what neighbourhood %i shows at the middle of the screen',
     (i) => {
       const plate = world.neighbourhoods[i]
-      const tallest = Math.max(...plate.layout.lots.map((l) => l.height))
+      const tallest = Math.max(...plate.layout.lots.map((lot) => lot.height))
       const { target } = plateFrame(plate, tallest)
       const screen = (x: number, y: number, z: number) => ({
         sx: (x - z) / Math.SQRT2,
@@ -138,7 +142,7 @@ describe('plateFrame centering', () => {
 
 describe('buildingFrame', () => {
   const plate = world.neighbourhoods[0]
-  const lot = plate.layout.lots.find((l) => !l.decor)!
+  const lot = plate.layout.lots.find((lot) => !lot.decor)!
   const target = plateFrame(plate, TOP).target
 
   it('frames a building, smaller than its neighbourhood', () => {

@@ -98,8 +98,8 @@ describe('allHosts', () => {
     const nas = endpoint('nas', null)
     const vm = endpoint('nas-vm', null, 'nas')
     const web = endpoint('web', null)
-    expect(allHosts(groupByHost([nas, vm, web])).map((g) => g.host.id)).toEqual(
-      ['nas', 'nas-vm', 'web'],
-    )
+    expect(
+      allHosts(groupByHost([nas, vm, web])).map((vmGroup) => vmGroup.host.id),
+    ).toEqual(['nas', 'nas-vm', 'web'])
   })
 })

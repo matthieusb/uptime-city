@@ -261,7 +261,9 @@ export function Shockwave({
   )
   useEffect(
     () => () => {
-      Object.values(materials).forEach((m) => m.dispose())
+      Object.values(materials).forEach((shaderMaterial) =>
+        shaderMaterial.dispose(),
+      )
     },
     [materials],
   )
@@ -327,7 +329,7 @@ export function Fires({
   )
   // When the first fire catches.
   const firstLit = useMemo(
-    () => Math.min(...flames.map((f) => f.ignite)),
+    () => Math.min(...flames.map((flame) => flame.ignite)),
     [flames],
   )
   const dummy = useMemo(() => new Object3D(), [])

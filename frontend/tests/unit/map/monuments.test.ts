@@ -51,12 +51,17 @@ const worlds = (specs: NeighbourhoodSpec[]) =>
 
 afterEach(() => setWorldSeed(''))
 
-const area = (n: Neighbourhood) => 4 * n.layout.halfWidth * n.layout.halfDepth
+const area = (neighbourhood: Neighbourhood) =>
+  4 * neighbourhood.layout.halfWidth * neighbourhood.layout.halfDepth
 const plates = (w: World) => [...w.neighbourhoods, ...w.wilds]
 const biggestOf = (w: World) =>
-  plates(w).reduce((best, n) => (area(n) > area(best) ? n : best))
-const monumentsOf = (n: Neighbourhood) =>
-  n.layout.structures.filter((s) => s.kind === 'monument')
+  plates(w).reduce((best, neighbourhood) =>
+    area(neighbourhood) > area(best) ? neighbourhood : best,
+  )
+const monumentsOf = (neighbourhood: Neighbourhood) =>
+  neighbourhood.layout.structures.filter(
+    (structure) => structure.kind === 'monument',
+  )
 
 describe('the monuments', () => {
   const kinds = Object.keys(MONUMENTS) as MonumentKind[]
@@ -105,7 +110,9 @@ describe('the monuments', () => {
     }
     for (const biome of BIOMES) {
       expect(
-        kinds.filter((k) => MONUMENTS[k].biomes.includes(biome)).length,
+        kinds.filter((monumentKind) =>
+          MONUMENTS[monumentKind].biomes.includes(biome),
+        ).length,
         biome,
       ).toBeGreaterThan(0)
     }
@@ -114,14 +121,16 @@ describe('the monuments', () => {
   it('stand on a footprint that grows with their size', () => {
     const footprint = (size: (typeof SIZES)[number]) =>
       kinds
-        .filter((k) => MONUMENTS[k].size === size)
-        .map((k) => MONUMENTS[k].footprint)
+        .filter((monumentKind) => MONUMENTS[monumentKind].size === size)
+        .map((monumentKind) => MONUMENTS[monumentKind].footprint)
     expect(SIZES).toEqual(['small', 'medium', 'big'])
     for (const size of SIZES) {
       expect(footprint(size).length, size).toBeGreaterThan(2)
       expect(new Set(footprint(size)).size, size).toBe(1)
     }
-    const [small, medium, big] = SIZES.map((s) => footprint(s)[0])
+    const [small, medium, big] = SIZES.map(
+      (monumentSize) => footprint(monumentSize)[0],
+    )
     expect(small).toBeLessThan(medium)
     expect(medium).toBeLessThan(big)
     expect(small % 2).toBe(1)
@@ -169,10 +178,11 @@ describe('the monuments of a world', () => {
   it('are at most one per tile, and two on the biggest tile at most', () => {
     for (const w of all) {
       const biggest = biggestOf(w)
-      for (const n of plates(w)) {
-        expect(monumentsOf(n).length, n.id).toBeLessThanOrEqual(
-          n === biggest ? 2 : 1,
-        )
+      for (const neighbourhood of plates(w)) {
+        expect(
+          monumentsOf(neighbourhood).length,
+          neighbourhood.id,
+        ).toBeLessThanOrEqual(neighbourhood === biggest ? 2 : 1)
       }
     }
   })
@@ -189,14 +199,16 @@ describe('the monuments of a world', () => {
 
   it('are each there once at most on the whole map', () => {
     for (const w of all) {
-      const kinds = findMonuments(w).map((m) => m.kind)
+      const kinds = findMonuments(w).map((monument) => monument.kind)
       expect(new Set(kinds).size, kinds.join(', ')).toBe(kinds.length)
     }
   })
 
   it('run out with the kinds, on a map with more tiles than monuments', () => {
     const many = Array.from({ length: 45 }, (_, i) => spec(`host${i}`, 1))
-    const found = findMonuments(worldLayout(many)).map((m) => m.kind)
+    const found = findMonuments(worldLayout(many)).map(
+      (monument) => monument.kind,
+    )
     expect(found.length).toBeGreaterThan(5)
     expect(found.length).toBeLessThanOrEqual(Object.keys(MONUMENTS).length)
     expect(new Set(found).size).toBe(found.length)
@@ -204,17 +216,22 @@ describe('the monuments of a world', () => {
 
   it('are not on every tile, and wild tiles can have one', () => {
     const counts = all.flatMap((w) =>
-      plates(w).map((n) => monumentsOf(n).length),
+      plates(w).map((neighbourhood) => monumentsOf(neighbourhood).length),
     )
     expect(counts.filter((c) => c === 0).length).toBeGreaterThan(0)
     expect(counts.filter((c) => c >= 1).length).toBeGreaterThan(all.length)
-    const wild = all.flatMap((w) => w.wilds.flatMap((n) => monumentsOf(n)))
+    const wild = all.flatMap((w) =>
+      w.wilds.flatMap((neighbourhood) => monumentsOf(neighbourhood)),
+    )
     expect(wild.length).toBeGreaterThan(0)
   })
 
   it('come the less often the smaller the tile', () => {
     const rows = worlds(homelab).flatMap((w) =>
-      plates(w).map((n) => ({ a: area(n), has: monumentsOf(n).length })),
+      plates(w).map((neighbourhood) => ({
+        a: area(neighbourhood),
+        has: monumentsOf(neighbourhood).length,
+      })),
     )
     rows.sort((p, q) => p.a - q.a)
     const third = Math.floor(rows.length / 3)
@@ -231,10 +248,12 @@ describe('the monuments of a world', () => {
   it('are no bigger than what the size of their tile allows', () => {
     const order = { small: 0, medium: 1, big: 2 }
     for (const w of all) {
-      for (const n of plates(w)) {
-        for (const s of monumentsOf(n)) {
-          const size = MONUMENTS[s.monument!].size
-          expect(order[size]).toBeLessThanOrEqual(order[sizeClass(area(n))])
+      for (const neighbourhood of plates(w)) {
+        for (const structure of monumentsOf(neighbourhood)) {
+          const size = MONUMENTS[structure.monument!].size
+          expect(order[size]).toBeLessThanOrEqual(
+            order[sizeClass(area(neighbourhood))],
+          )
         }
       }
     }
@@ -242,18 +261,18 @@ describe('the monuments of a world', () => {
 
   it('are of a kind that goes with the biome of the ground under them', () => {
     for (const w of all) {
-      for (const n of plates(w)) {
-        for (const s of monumentsOf(n)) {
-          const { biomes } = MONUMENTS[s.monument!]
-          const under = n.layout.tiles.filter(
+      for (const neighbourhood of plates(w)) {
+        for (const structure of monumentsOf(neighbourhood)) {
+          const { biomes } = MONUMENTS[structure.monument!]
+          const under = neighbourhood.layout.tiles.filter(
             (t) =>
-              Math.abs(t.x - s.x) < s.width / 2 &&
-              Math.abs(t.z - s.z) < s.depth / 2,
+              Math.abs(t.x - structure.x) < structure.width / 2 &&
+              Math.abs(t.z - structure.z) < structure.depth / 2,
           )
-          expect(under.length).toBe(s.width * s.depth)
+          expect(under.length).toBe(structure.width * structure.depth)
           expect(
             under.filter((t) => !biomes.includes(t.biome)),
-            `${s.monument} on ${n.id}`,
+            `${structure.monument} on ${neighbourhood.id}`,
           ).toEqual([])
         }
       }
@@ -262,16 +281,19 @@ describe('the monuments of a world', () => {
 
   it('stand on their tile, on the footprint of their size', () => {
     for (const w of all) {
-      for (const n of plates(w)) {
-        for (const s of monumentsOf(n)) {
-          const spec = MONUMENTS[s.monument!]
-          expect([s.width, s.depth]).toEqual([spec.footprint, spec.footprint])
-          expect(Math.abs(s.x) + s.width / 2).toBeLessThanOrEqual(
-            n.layout.halfWidth,
-          )
-          expect(Math.abs(s.z) + s.depth / 2).toBeLessThanOrEqual(
-            n.layout.halfDepth,
-          )
+      for (const neighbourhood of plates(w)) {
+        for (const structure of monumentsOf(neighbourhood)) {
+          const spec = MONUMENTS[structure.monument!]
+          expect([structure.width, structure.depth]).toEqual([
+            spec.footprint,
+            spec.footprint,
+          ])
+          expect(
+            Math.abs(structure.x) + structure.width / 2,
+          ).toBeLessThanOrEqual(neighbourhood.layout.halfWidth)
+          expect(
+            Math.abs(structure.z) + structure.depth / 2,
+          ).toBeLessThanOrEqual(neighbourhood.layout.halfDepth)
         }
       }
     }
@@ -281,20 +303,24 @@ describe('the monuments of a world', () => {
     const water = new Set(['water', 'shallow', 'pond', 'ice'])
     const ways = new Set(['road', 'island', 'track'])
     for (const w of all) {
-      for (const n of plates(w)) {
-        for (const s of monumentsOf(n)) {
+      for (const neighbourhood of plates(w)) {
+        for (const structure of monumentsOf(neighbourhood)) {
           const within = (margin: number) => (t: { x: number; z: number }) =>
-            Math.abs(t.x - s.x) < s.width / 2 + margin &&
-            Math.abs(t.z - s.z) < s.depth / 2 + margin
-          const under = n.layout.tiles.filter(
+            Math.abs(t.x - structure.x) < structure.width / 2 + margin &&
+            Math.abs(t.z - structure.z) < structure.depth / 2 + margin
+          const under = neighbourhood.layout.tiles.filter(
             (t) => (water.has(t.kind) || ways.has(t.kind)) && within(0)(t),
           )
-          expect(under, `${s.monument} on ${n.id}`).toEqual([])
+          expect(under, `${structure.monument} on ${neighbourhood.id}`).toEqual(
+            [],
+          )
           // Water may lap at the foot of a monument, a road keeps a tile away.
-          const near = n.layout.tiles.filter(
+          const near = neighbourhood.layout.tiles.filter(
             (t) => ways.has(t.kind) && within(1)(t),
           )
-          expect(near, `${s.monument} on ${n.id}`).toEqual([])
+          expect(near, `${structure.monument} on ${neighbourhood.id}`).toEqual(
+            [],
+          )
         }
       }
     }
@@ -302,28 +328,30 @@ describe('the monuments of a world', () => {
 
   it('never cover a building, a structure, the airport or a tree', () => {
     for (const w of all) {
-      for (const n of plates(w)) {
-        for (const s of monumentsOf(n)) {
-          for (const lot of n.layout.lots) {
+      for (const neighbourhood of plates(w)) {
+        for (const structure of monumentsOf(neighbourhood)) {
+          for (const lot of neighbourhood.layout.lots) {
             const half = lot.width / 2 + PLAZA_MARGIN
             expect(
-              Math.abs(lot.x - s.x) >= s.width / 2 + half ||
-                Math.abs(lot.z - s.z) >= s.depth / 2 + half,
+              Math.abs(lot.x - structure.x) >= structure.width / 2 + half ||
+                Math.abs(lot.z - structure.z) >= structure.depth / 2 + half,
               lot.id,
             ).toBe(true)
           }
-          for (const other of n.layout.structures) {
-            if (other === s) continue
+          for (const other of neighbourhood.layout.structures) {
+            if (other === structure) continue
             expect(
-              Math.abs(other.x - s.x) >= (other.width + s.width) / 2 ||
-                Math.abs(other.z - s.z) >= (other.depth + s.depth) / 2,
+              Math.abs(other.x - structure.x) >=
+                (other.width + structure.width) / 2 ||
+                Math.abs(other.z - structure.z) >=
+                  (other.depth + structure.depth) / 2,
               other.kind,
             ).toBe(true)
           }
-          for (const tree of n.layout.trees) {
+          for (const tree of neighbourhood.layout.trees) {
             expect(
-              Math.abs(tree.x - s.x) >= s.width / 2 ||
-                Math.abs(tree.z - s.z) >= s.depth / 2,
+              Math.abs(tree.x - structure.x) >= structure.width / 2 ||
+                Math.abs(tree.z - structure.z) >= structure.depth / 2,
             ).toBe(true)
           }
         }
@@ -333,17 +361,21 @@ describe('the monuments of a world', () => {
 
   it('hide no monitored building on screen', () => {
     for (const w of all) {
-      const lots = w.neighbourhoods.flatMap((n) =>
-        n.layout.lots.map((l) => ({
-          x: n.x + l.x,
-          z: n.z + l.z,
-          width: l.width,
+      const lots = w.neighbourhoods.flatMap((neighbourhood) =>
+        neighbourhood.layout.lots.map((lot) => ({
+          x: neighbourhood.x + lot.x,
+          z: neighbourhood.z + lot.z,
+          width: lot.width,
         })),
       )
-      for (const n of plates(w)) {
-        for (const s of monumentsOf(n)) {
-          for (const o of solids(s.monument!)) {
-            const object = { ...o, x: n.x + s.x + o.x, z: n.z + s.z + o.z }
+      for (const neighbourhood of plates(w)) {
+        for (const structure of monumentsOf(neighbourhood)) {
+          for (const solid of solids(structure.monument!)) {
+            const object = {
+              ...solid,
+              x: neighbourhood.x + structure.x + solid.x,
+              z: neighbourhood.z + structure.z + solid.z,
+            }
             expect(lots.filter((lot) => hides(object, lot))).toEqual([])
           }
         }
@@ -353,15 +385,18 @@ describe('the monuments of a world', () => {
 
   it('leave every monitored building and the airport as they were', () => {
     for (const w of worlds(homelab)) {
-      const ids = w.neighbourhoods.flatMap((n) =>
-        n.layout.lots.map((l) => l.id),
+      const ids = w.neighbourhoods.flatMap((neighbourhood) =>
+        neighbourhood.layout.lots.map((lot) => lot.id),
       )
       for (const host of homelab) {
-        for (const b of host.buildings) expect(ids).toContain(b.id)
+        for (const hostSpec of host.buildings)
+          expect(ids).toContain(hostSpec.id)
       }
       expect(
-        w.neighbourhoods.filter((n) =>
-          n.layout.structures.some((s) => s.kind === 'airport'),
+        w.neighbourhoods.filter((neighbourhood) =>
+          neighbourhood.layout.structures.some(
+            (structure) => structure.kind === 'airport',
+          ),
         ),
       ).toHaveLength(1)
     }
@@ -371,7 +406,10 @@ describe('the monuments of a world', () => {
     for (const w of all) {
       const found = findMonuments(w)
       expect(found.length).toBe(
-        plates(w).reduce((sum, n) => sum + monumentsOf(n).length, 0),
+        plates(w).reduce(
+          (sum, neighbourhood) => sum + monumentsOf(neighbourhood).length,
+          0,
+        ),
       )
       for (const m of found) expect(m.kind).toBe(m.structure.monument)
     }
@@ -379,18 +417,20 @@ describe('the monuments of a world', () => {
 
   it('go with the tile when it is nuked', () => {
     const [w] = worlds(homelab)
-    const n = plates(w).find((p) => monumentsOf(p).length > 0)!
-    expect(nukedLayout(n.layout).structures).toEqual([])
+    const neighbourhood = plates(w).find(
+      (neighbourhood) => monumentsOf(neighbourhood).length > 0,
+    )!
+    expect(nukedLayout(neighbourhood.layout).structures).toEqual([])
   })
 
   it('are laid the same for the same seed, and not for another', () => {
     const lay = (seed: string) => {
       setWorldSeed(seed)
       return JSON.stringify(
-        findMonuments(worldLayout(homelab)).map((m) => [
-          m.kind,
-          m.structure.x,
-          m.structure.z,
+        findMonuments(worldLayout(homelab)).map((monument) => [
+          monument.kind,
+          monument.structure.x,
+          monument.structure.z,
         ]),
       )
     }
@@ -400,10 +440,13 @@ describe('the monuments of a world', () => {
 
   it('are left out when there is no tile big enough', () => {
     const tiny = worldLayout([spec('a')])
-    for (const n of plates(tiny)) {
-      for (const s of monumentsOf(n)) {
-        expect(MONUMENTS[s.monument!].footprint).toBeLessThanOrEqual(
-          Math.min(2 * n.layout.halfWidth, 2 * n.layout.halfDepth),
+    for (const neighbourhood of plates(tiny)) {
+      for (const structure of monumentsOf(neighbourhood)) {
+        expect(MONUMENTS[structure.monument!].footprint).toBeLessThanOrEqual(
+          Math.min(
+            2 * neighbourhood.layout.halfWidth,
+            2 * neighbourhood.layout.halfDepth,
+          ),
         )
       }
     }
@@ -432,7 +475,7 @@ describe('the drawing', () => {
         sy: number
         sz: number
       }[] = []
-      monumentBoxes(s, (_, b) => boxes.push(b))
+      monumentBoxes(s, (_, boxOut) => boxes.push(boxOut))
       expect(boxes.length, kind).toBeGreaterThan(8)
       const half = footprint / 2 + 1e-6
       // Every box that goes out of the footprint or under the ground, so one run lists them all.
@@ -467,7 +510,10 @@ describe('the drawing', () => {
         monument: kind,
       }
       let top = 0
-      monumentBoxes(s, (_, b) => (top = Math.max(top, b.y + b.sy / 2)))
+      monumentBoxes(
+        s,
+        (_, boxOut) => (top = Math.max(top, boxOut.y + boxOut.sy / 2)),
+      )
       expect(top, kind).toBeLessThanOrEqual(height + 1e-6)
       expect(top, kind).toBeGreaterThan(height * 0.8)
     }

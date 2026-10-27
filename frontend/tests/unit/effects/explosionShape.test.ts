@@ -15,7 +15,7 @@ import type { BuildingState, Status } from '../../../src/domain/status'
 const state = (floors: Status[], collapsed = false): BuildingState => ({
   collapsed,
   floors,
-  burning: floors.map((s, i) => !collapsed && i > 0 && s === 'down'),
+  burning: floors.map((status, i) => !collapsed && i > 0 && status === 'down'),
 })
 
 describe('explodedFloors', () => {
@@ -90,24 +90,27 @@ describe('explosionParts', () => {
   })
 
   it('has fireballs, chunks and embers', () => {
-    expect(new Set(parts.map((p) => p.kind))).toEqual(
+    expect(new Set(parts.map((part) => part.kind))).toEqual(
       new Set(['fire', 'chunk', 'ember']),
     )
   })
 
   it('starts all of them at the walls of the floor', () => {
     const base = floorBase(2)
-    for (const p of parts) {
-      expect(Math.max(Math.abs(p.x), Math.abs(p.z))).toBeCloseTo(width / 2, 1)
-      expect(p.y).toBeGreaterThanOrEqual(base)
-      expect(p.y).toBeLessThanOrEqual(base + floorHeight(2))
+    for (const part of parts) {
+      expect(Math.max(Math.abs(part.x), Math.abs(part.z))).toBeCloseTo(
+        width / 2,
+        1,
+      )
+      expect(part.y).toBeGreaterThanOrEqual(base)
+      expect(part.y).toBeLessThanOrEqual(base + floorHeight(2))
     }
   })
 
   it('throws the fireballs out of the walls, slowing down', () => {
-    for (const p of parts.filter((q) => q.kind === 'fire')) {
+    for (const part of parts.filter((part) => part.kind === 'fire')) {
       const out = (age: number) => {
-        const at = partPose(p, age)
+        const at = partPose(part, age)
         return Math.hypot(at.x, at.z)
       }
       expect(out(0.3)).toBeGreaterThan(out(0))
@@ -116,29 +119,29 @@ describe('explosionParts', () => {
   })
 
   it('throws the chunks up and out, then lets them fall', () => {
-    for (const p of parts.filter((q) => q.kind === 'chunk')) {
+    for (const part of parts.filter((part) => part.kind === 'chunk')) {
       const peak = Math.max(
-        ...[0.1, 0.2, 0.3, 0.4, 0.5].map((age) => partPose(p, age).y),
+        ...[0.1, 0.2, 0.3, 0.4, 0.5].map((age) => partPose(part, age).y),
       )
-      expect(peak).toBeGreaterThan(p.y)
-      expect(partPose(p, p.life * 0.99).y).toBeLessThan(peak)
+      expect(peak).toBeGreaterThan(part.y)
+      expect(partPose(part, part.life * 0.99).y).toBeLessThan(peak)
     }
   })
 
   it('never goes through the ground', () => {
-    for (const p of parts) {
+    for (const part of parts) {
       for (let age = 0; age <= EXPLOSION_S; age += 0.1) {
-        expect(partPose(p, age).y).toBeGreaterThanOrEqual(0)
+        expect(partPose(part, age).y).toBeGreaterThanOrEqual(0)
       }
     }
   })
 
   it('shrinks away by the end of its life, and is nothing before it starts', () => {
-    for (const p of parts) {
-      expect(p.life).toBeLessThanOrEqual(EXPLOSION_S)
-      expect(partPose(p, p.life).scale).toBe(0)
-      expect(partPose(p, -1).scale).toBe(0)
-      expect(partPose(p, p.life / 2).scale).toBeGreaterThan(0)
+    for (const part of parts) {
+      expect(part.life).toBeLessThanOrEqual(EXPLOSION_S)
+      expect(partPose(part, part.life).scale).toBe(0)
+      expect(partPose(part, -1).scale).toBe(0)
+      expect(partPose(part, part.life / 2).scale).toBeGreaterThan(0)
     }
   })
 

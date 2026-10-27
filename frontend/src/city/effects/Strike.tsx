@@ -100,10 +100,14 @@ function Missile({ since, course }: { since: () => number; course: Course }) {
   })
   return (
     <group ref={group}>
-      {boxes.map((b, i) => (
-        <mesh key={i} position={[b.x, b.y, b.z]} castShadow>
-          <boxGeometry args={[b.w, b.h, b.d]} />
-          <meshStandardMaterial color={b.color} roughness={0.6} />
+      {boxes.map((missileBox, i) => (
+        <mesh
+          key={i}
+          position={[missileBox.x, missileBox.y, missileBox.z]}
+          castShadow
+        >
+          <boxGeometry args={[missileBox.w, missileBox.h, missileBox.d]} />
+          <meshStandardMaterial color={missileBox.color} roughness={0.6} />
         </mesh>
       ))}
       <mesh ref={flame} position={[0, 2.35, 0]}>

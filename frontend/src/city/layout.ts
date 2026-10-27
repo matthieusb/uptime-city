@@ -485,7 +485,9 @@ function placeBuildings(hosts: HostSpec[], roads: Road[]): Lot[] {
   const columns: number[] = []
   for (let first = 0; first < hosts.length; first += perRow) {
     const row = hosts.slice(first, first + perRow)
-    const slots = row.map((h) => specWidth(h) * Math.SQRT2 + SLOT_MARGIN)
+    const slots = row.map(
+      (hostSpec) => specWidth(hostSpec) * Math.SQRT2 + SLOT_MARGIN,
+    )
     let edge = -slots.reduce((a, b) => a + b, 0) / 2
     slots.forEach((slot) => {
       columns.push(edge + slot / 2)
@@ -536,8 +538,8 @@ const PITCH_SIN = Math.sin(Math.PI / 6)
 // building go to: the one where fewer other buildings are in the way. Ties
 // go right.
 export function serviceLabelSides(lots: Lot[]): Map<string, 'left' | 'right'> {
-  const column = (l: Lot) => (l.x - l.z) / Math.SQRT2
-  const depth = (l: Lot) => (l.x + l.z) / Math.SQRT2
+  const column = (lot: Lot) => (lot.x - lot.z) / Math.SQRT2
+  const depth = (lot: Lot) => (lot.x + lot.z) / Math.SQRT2
   const sides = new Map<string, 'left' | 'right'>()
   for (const lot of lots) {
     const hits = { left: 0, right: 0 }
@@ -844,7 +846,7 @@ export function cityLayout(
   // at the same distance from the front road, so that plates line up.
   minHalfDepth = 0,
 ): CityLayout {
-  const ids = hosts.map((h) => h.id)
+  const ids = hosts.map((hostSpec) => hostSpec.id)
   // Raw coordinates: the front road runs along z = 0. Everything is moved
   // along Z at the end, to center the ground.
   const rowCount = Math.max(1, Math.ceil(ids.length / ROW_MAX))
@@ -864,7 +866,7 @@ export function cityLayout(
   const xMax = Math.max(
     minHalfWidth,
     Math.ceil(
-      Math.max(0, ...lots.map((l) => Math.abs(l.x) + l.width / 2 - 0.6)) +
+      Math.max(0, ...lots.map((lot) => Math.abs(lot.x) + lot.width / 2 - 0.6)) +
         1 +
         X_MARGIN,
     ),
@@ -876,7 +878,7 @@ export function cityLayout(
   }
   const backZ = roads[roads.length - 1].z
   // Wide buildings stand further from their road.
-  const extra = Math.max(0, ...lots.map((l) => l.width - BUILDING_WIDTH))
+  const extra = Math.max(0, ...lots.map((lot) => lot.width - BUILDING_WIDTH))
   const zMax = FRONT
   // An even number of tiles each side of the center.
   let zMin = Math.floor(backZ - BACK - extra)
@@ -1032,7 +1034,7 @@ export function cityLayout(
   // Paths, from the roads into the town, mostly where it is built up. They
   // keep away from the monitored buildings, but for a few.
   const byPath = new Set(
-    lots.filter((l) => !l.decor && random() < PATH_BY_BUILDING),
+    lots.filter((lot) => !lot.decor && random() < PATH_BY_BUILDING),
   )
   const nearLot = new Set<string>()
   for (const lot of lots) {
@@ -1336,10 +1338,14 @@ export function cityLayout(
     patches: moved(patches),
     trees: moved(trees.filter((t) => clear({ ...t, radius: 0.45 * t.scale }))),
     flowers: moved(
-      flowers.filter((f) => clear({ ...f, height: f.y + 0.3, radius: 0.15 })),
+      flowers.filter((flower) =>
+        clear({ ...flower, height: flower.y + 0.3, radius: 0.15 }),
+      ),
     ),
     reeds: moved(
-      reeds.filter((r) => clear({ ...r, height: r.y + 0.5, radius: 0.15 })),
+      reeds.filter((point) =>
+        clear({ ...point, height: point.y + 0.5, radius: 0.15 }),
+      ),
     ),
     rocks: moved(rocks),
     umbrellas: moved(

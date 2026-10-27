@@ -38,8 +38,8 @@ export function CameraRig({
   offset: [number, number, number]
   focusFrame: Frame | null
 }) {
-  const get = useThree((s) => s.get)
-  const { width, height } = useThree((s) => s.size)
+  const get = useThree((rootState) => rootState.get)
+  const { width, height } = useThree((rootState) => rootState.size)
   const saved = useRef<View | null>(null)
   const goal = useRef<View | null>(null)
 
@@ -66,7 +66,7 @@ export function CameraRig({
   }, [get, focusFrame, width, height])
 
   // Whoever drags or zooms the map takes over from the move.
-  const element = useThree((s) => s.gl.domElement)
+  const element = useThree((rootState) => rootState.gl.domElement)
   useEffect(() => {
     const stop = () => {
       goal.current = null
@@ -159,10 +159,10 @@ export function Backdrop({
       visible={false}
       renderOrder={1}
       raycast={focus ? Mesh.prototype.raycast : NO_RAYCAST}
-      onClick={(e) => {
-        e.stopPropagation()
+      onClick={(event) => {
+        event.stopPropagation()
         // A drag of the map is not a click.
-        if (e.delta <= 4) onClose()
+        if (event.delta <= 4) onClose()
       }}
     >
       <planeGeometry args={[size, size]} />
