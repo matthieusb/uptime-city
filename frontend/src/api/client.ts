@@ -3,6 +3,7 @@ import type { components, paths } from './types'
 export type EndpointInfo = components['schemas']['EndpointInfo']
 export type Info = components['schemas']['Info']
 export type CitySettings = components['schemas']['CitySettings']
+export type PlanetSettings = components['schemas']['PlanetSettings']
 export type CheckResult = components['schemas']['ProbeResult']
 
 async function getJson<T>(path: string): Promise<T> {
@@ -52,10 +53,20 @@ export const fetchHistory = (id: string) =>
 
 export const fetchCity = () => getJson<CitySettings>('/api/v1/city')
 
+export const fetchPlanet = () => getJson<PlanetSettings>('/api/v1/planet')
+
 // Draws a new seed for the city, which the backend keeps.
 export async function regenerateCity(): Promise<CitySettings> {
   const path = '/api/v1/city/regenerate'
   const response = await fetch(path, { method: 'POST' })
   if (!response.ok) throw new Error(`${path}: ${response.status}`)
   return response.json() as Promise<CitySettings>
+}
+
+// Draws a new seed for the planet, which the backend keeps apart from the city's.
+export async function regeneratePlanet(): Promise<PlanetSettings> {
+  const path = '/api/v1/planet/regenerate'
+  const response = await fetch(path, { method: 'POST' })
+  if (!response.ok) throw new Error(`${path}: ${response.status}`)
+  return response.json() as Promise<PlanetSettings>
 }

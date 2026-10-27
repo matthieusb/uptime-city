@@ -133,3 +133,15 @@ it('puts the planet button right of the exploded one, next to the toolbox one', 
     .map((button) => button.getAttribute('aria-label'))
   expect(names).toEqual(['Exploded view', 'Planet view', 'Toolbox'])
 })
+
+it('regenerates the planet, not the city, while on the planet', async () => {
+  render(<Toolbox onRegenerate={vi.fn()} planet onTogglePlanet={vi.fn()} />)
+
+  await userEvent.click(screen.getByRole('button', { name: 'Toolbox' }))
+  expect(
+    screen.getByRole('button', { name: 'Regenerate the planet' }),
+  ).toBeTruthy()
+  expect(
+    screen.queryByRole('button', { name: 'Regenerate the city' }),
+  ).toBeNull()
+})

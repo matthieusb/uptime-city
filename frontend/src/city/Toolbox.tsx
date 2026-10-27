@@ -34,7 +34,7 @@ export default function Toolbox({
             <span aria-hidden="true" data-testid="regenerate-icon">
               ↻
             </span>{' '}
-            Regenerate the city
+            {planet ? 'Regenerate the planet' : 'Regenerate the city'}
           </button>
         </div>
       )}

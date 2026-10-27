@@ -1,6 +1,6 @@
 # uptime-city: frontend
 
-Web app that only displays the monitoring results served by the backend. It never sends commands, except the simulation buttons and the toolbox's regenerate button. See the root `CLAUDE.md` for the project overview and the REST/SSE contract with the backend.
+Web app that only displays the monitoring results served by the backend. It never sends commands, except the simulation buttons and the toolbox's regenerate button (city or planet). See the root `CLAUDE.md` for the project overview and the REST/SSE contract with the backend.
 
 ## 3D engine: three.js
 
@@ -98,6 +98,18 @@ How they are applied (`placeAirport` in `src/city/airport.ts`, called by `worldL
 
 How they are applied (`placeMonuments` in `src/city/monuments.ts`, called by `worldLayout` after the airport; the footprint search shared with the airport in `src/city/footprint.ts`, the drawings in `src/city/monumentShapes.ts`).
 
+## Planet rules
+
+- The planet view replaces the flat map by a sphere of sea with one island per physical host (no wild tile, road, rail or airport). Each island is a neighbourhood made by the same generators, wrapped round the sphere about its own middle, so the ground is spherical and distances along it are kept. Between the islands lies sea, never a bridge.
+- Islands are spread evenly over the sphere (bigger score, bigger island) with at least 8 tiles of sea between them. Their biomes follow the latitude: tundra and mountains towards the poles, desert towards the equator, no coastal biome.
+- The sea moves (swell, glints and foam in a shader).
+- The globe turns under the pointer; there is no focus view on it. The planet seed is kept by the backend apart from the city's.
+
+How they are applied (`planetLayout` in `src/city/planet/planet.ts`):
+
+- The islands are laid in a flat atlas, a grid of cells (`cell`, `columns`), and the vertex shaders bend it onto the sphere (`src/city/planet/bend.ts` has the maths and the GLSL, `bendPatch.ts` rewrites three's shader chunks while the planet shows, the sprites, lines and the nuke included). A material with the define `PLANET_FREE` is left alone (the sky planes). Nothing is culled while bent, as culling reads the atlas.
+- The canvas is made after the bend is switched on or off, as shaders are read when compiled.
+
 ## Performance rules
 
 - No real light per effect: every point light is evaluated for every lit fragment of the scene, and a change in their number recompiles the shaders. Fire has none, the floors glow red instead.
@@ -126,6 +138,7 @@ frontend/src/
   domain/   status.ts            # status -> color/animation (pure)
   ui/       CheckBars.tsx RefreshSelector.tsx SplashScreen.tsx …
   city/     (lazy) CityView.tsx Buildings.tsx layout.ts world.ts effects/
+            planet/ (layout, bend, sea and sky planes of the planet view)
             map/ (roads, seas, seams, wilds, sizing: one module per unit of the map)
 frontend/tests/  unit/{domain,map,vehicles,effects,view,components,app} (vitest)
 ```
@@ -173,6 +186,7 @@ What exists today, one sentence per feature (see `.claude/rules/document-complet
 - **3D refresh**: the page reloads the statuses every 30s by default (in sync with the simulation when the backend simulates), and a box in the menus at the top right of the 3D view (whole map only, below the effects) picks 10s, 30s, 1min or 5min, or, in simulation only, a sync with the simulation's own refresh, and tells on the right of its title "in x seconds" before the next reload, while its "Refresh" title breathes to bold for 3 seconds as a reload begins. See `src/ui/RefreshSelector.tsx`, `src/ui/useHistoryRefresh.ts`, `src/App.tsx`, `tests/unit/components/RefreshSelector.test.tsx`, `tests/unit/app/useHistoryRefresh.test.tsx` and `tests/unit/app/App.test.tsx`.
 - **Toolbox**: a toolbox icon at the bottom right of the 3D view (whole map only) opens a black box of actions, for now one button that regenerates the city: the backend draws and keeps a new seed (`POST /api/v1/city/regenerate`, read back with `GET /api/v1/city` before the city is built), and the splash screen covers the view (at least half a second) until the new city is built; the seed is mixed into every random draw of the layout, so the same seed lays the same city and an empty one the original. See `src/city/Toolbox.tsx`, `src/city/seed.ts`, `src/city/CityView.tsx`, `src/App.tsx`, `src/api/client.ts`, `tests/unit/components/Toolbox.test.tsx`, `tests/unit/map/seed.test.ts` and `tests/unit/app/App.test.tsx`.
 - **Exploded view**: a 💥 button left of the toolbox one switches a view where every tile moves a little away from the middle of the map (`EXPLODE_SPREAD`, 15% of its distance to it, so the gap follows the tile sizes), easing in and out, and coming back together in focus view; a view setting only, the layout does not change. See `src/city/Toolbox.tsx`, `src/city/Plate.tsx`, `src/city/CityView.tsx` and `tests/unit/components/Toolbox.test.tsx`.
+- **Planet view**: a 🪐 button between the exploded one and the toolbox one switches from the flat plan to a planet (a 🗺️ button goes back), behind the splash screen "Building the planet…"; the islands are wrapped round a sphere of moving sea, planes circle it, the globe turns under the pointer, and the Toolbox regenerates the planet's own seed (`GET`/`POST /api/v1/planet`); the chosen view is kept in local storage. See `src/city/planet/` (`planet.ts`, `bend.ts`, `bendPatch.ts`, `PlanetSea.tsx`, `PlanetFlights.tsx`, `skyFlights.ts`), `src/city/CityView.tsx`, `src/city/Toolbox.tsx`, `src/App.tsx`, `src/api/client.ts`, `tests/unit/map/planet.test.ts`, `tests/unit/map/bend.test.ts`, `tests/unit/map/bendPatch.test.ts`, `tests/unit/map/sphere.test.ts`, `tests/unit/map/planetWorld.test.ts`, `tests/unit/vehicles/skyFlights.test.ts`, `tests/unit/components/Toolbox.test.tsx` and `tests/unit/app/App.test.tsx`.
 - **Sliding names**: in the 2D panels over the 3D view (a building's floors, the services of a badge), a service name too long for its box slides to its end and back, pausing at both ends, so it can be read whole; with reduced motion it stays cut short with an ellipsis, and its tooltip shows it whole. See `src/ui/MarqueeText.tsx`, `src/ui/marquee.ts`, `src/city/BuildingPanel.tsx`, `src/city/StatusPanel.tsx`, `src/index.css` and `tests/unit/components/MarqueeText.test.tsx`.
 - **Service graph**: a 📈 button next to the building icon of each service in the status panel (and on each floor of the building panel) opens a black box, with its top aligned with that panel, filling the room between the panel and the right menus (on the left of the building panel, to the edge of the view), graphing the response times of the checks we hold (the last 50): response time up, time across, one line that goes on through the outages, each of which is a red dotted vertical line (a failed check that has a response time keeps its point), and a tooltip with the time and response time of the check under the pointer; the box is moved by its title bar, resized by its bottom right corner, and shows one service at a time, closed by the button, its cross, or when its service leaves the list; plain SVG, no chart library; four cards under the graph tell the current status (a breathing UP or DOWN badge), the average response time, its range and how long ago the last check was. See `src/city/ServiceGraph.tsx`, `src/ui/useNow.ts`, `src/city/useServiceGraph.ts`, `src/domain/graph.ts`, `src/city/StatusPanel.tsx`, `src/city/BuildingPanel.tsx`, `tests/unit/domain/graph.test.ts`, `tests/unit/components/ServiceGraph.test.tsx`, `tests/unit/components/StatusPanel.test.tsx` and `tests/unit/components/BuildingPanel.test.tsx`.
 - **Smooth zoom**: the labels upload their texture before they first show and set nothing on a frame where nothing moved, and the shadow map is redrawn less often while the camera moves. See `src/city/labelView.ts`, `src/city/Buildings.tsx` (`Label`), `src/city/shadowPace.ts`, `src/city/ShadowPacer.tsx`, `tests/unit/view/labelView.test.ts` and `tests/unit/view/shadowPace.test.ts`.
